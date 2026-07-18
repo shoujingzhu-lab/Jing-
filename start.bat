@@ -1,78 +1,67 @@
 @echo off
-chcp 65001 >nul
 REM ============================================
-REM 量化交易系统 — 一键启动 (Windows)
-REM 后端: FastAPI :8000
-REM 前端: Vite :3000
+REM Quant Trading System - Launcher
+REM [1] Backend (FastAPI :8000)
+REM [2] Frontend (Vite :3000)
+REM [3] Both
 REM ============================================
 
-setlocal enabledelayedexpansion
+setlocal
 
 echo ============================================
-echo   量化交易系统 — 启动菜单
+echo   Quant Trading System - Launcher
 echo ============================================
 echo.
-echo   [1] 启动后端 (FastAPI  :8000)
-echo   [2] 启动前端 (Vite     :3000)
-echo   [3] 启动全部 (后端 + 前端)
-echo   [0] 退出
+echo   [1] Backend  (FastAPI  :8000)
+echo   [2] Frontend (Vite     :3000)
+echo   [3] Both     (Backend + Frontend)
+echo   [0] Exit
 echo.
-set /p CHOICE="请选择 [0-3]: "
+set /p CHOICE="Select [0-3]: "
 
 if "%CHOICE%"=="0" exit /b 0
 if "%CHOICE%"=="1" goto start_backend
 if "%CHOICE%"=="2" goto start_frontend
 if "%CHOICE%"=="3" goto start_all
-echo 无效选择
+echo Invalid choice
 pause
 exit /b 1
 
 :start_backend
 echo.
-echo ============================================
-echo   启动后端...
-echo ============================================
+echo === Starting Backend ===
 call "%~dp0start_backend.bat"
 goto :eof
 
 :start_frontend
 echo.
-echo ============================================
-echo   启动前端...
-echo ============================================
+echo === Starting Frontend ===
 call :run_frontend
 goto :eof
 
 :start_all
 echo.
-echo ============================================
-echo   启动全部服务...
-echo ============================================
-echo [!] 后端将在新窗口启动
-start "量化-后端" cmd /c "%~dp0start_backend.bat"
-timeout /t 3 >nul
-echo [>] 启动前端...
+echo === Starting Both ===
+start "Quant-Backend" cmd /c "%~dp0start_backend.bat"
+timeout /t 4 >nul
 call :run_frontend
 goto :eof
 
 :run_frontend
 set "FRONTEND_DIR=%~dp0frontend"
-
-where node >nul 2>&1 || (echo [X] 未找到 Node.js && pause && exit /b 1)
+where node >nul 2>&1 || (echo [FAIL] Node.js not found & pause & exit /b 1)
 echo [OK] Node.js
 
-cd /d "%FRONTEND_DIR%" || (echo [X] 无法进入 frontend 目录 && pause && exit /b 1)
+cd /d "%FRONTEND_DIR%" || (echo [FAIL] frontend dir not found & pause & exit /b 1)
 
 if not exist "node_modules\" (
-    echo [>] 安装前端依赖...
-    call npm install || (echo [X] 安装失败 && pause && exit /b 1)
-) else (
-    echo [OK] node_modules 已存在
+    echo [!] Installing npm packages...
+    call npm install || (echo [FAIL] npm install failed & pause & exit /b 1)
 )
 
-echo [>] 启动 Vite...
-echo    前端: http://localhost:3000/
-echo    按 Ctrl+C 停止
+echo [>] Starting Vite + opening browser...
+echo     http://localhost:3000/
+echo     Press Ctrl+C to stop
 echo ============================================
-call npx vite --host
+call npx vite --host --open
 goto :eof
