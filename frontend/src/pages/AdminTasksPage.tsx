@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, Switch, message, Tooltip } from 'antd';
 import { ReloadOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
-import { mockSystemTasks, mockDelay } from '@/lib/mock';
+import { adminApi } from '@/lib/api';
 import StatusTag from '@/components/ui/StatusTag';
 import type { SystemTask } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -10,7 +10,24 @@ export default function AdminTasksPage() {
   const [tasks, setTasks] = useState<SystemTask[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { mockDelay(mockSystemTasks(), 400).then((t) => { setTasks(t); setLoading(false); }); }, []);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await adminApi.getConfig();
+        const config = (res.data as unknown as { data: Record<string, unknown> })?.data
+          || (res.data as unknown as Record<string, unknown>);
+        // 从系统配置中构建任务列表（如果后端有此数据）
+        if (config && config.tasks) {
+          setTasks(config.tasks as SystemTask[]);
+        }
+      } catch {
+        // 后端未启动时为空
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const triggerTask = (id: string) => {
     const t = tasks.find((x) => x.id === id);
@@ -19,7 +36,7 @@ export default function AdminTasksPage() {
   };
 
   const toggleTask = (id: string, enabled: boolean) => {
-    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: enabled ? 'running' : 'paused' as const } : t));
+    setTasks((prev) => prev.map((t) => t.id === id ? { ...t, status: enabled ? 'running' as const : 'paused' as const } : t));
     message.success(enabled ? '任务已启用' : '任务已暂停');
   };
 

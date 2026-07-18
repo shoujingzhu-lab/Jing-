@@ -1,16 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Typography, Card, Table, Button, Space, Tag, Switch, Modal, Form, Input, Select, InputNumber, message, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, ThunderboltOutlined, ReloadOutlined } from '@ant-design/icons';
 import EmptyState from '@/components/ui/EmptyState';
-import StatusTag from '@/components/ui/StatusTag';
 import type { Webhook } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
-
-const MOCK_WEBHOOKS: Webhook[] = [
-  { id: 'wh-001', name: '价格突破告警', url: 'https://hooks.example.com/price-break', secret: 'sec_****', symbols: ['BTC/USDT', 'ETH/USDT'], eventTypes: ['price_breakout'], rateLimit: 10, enabled: true, lastTriggeredAt: '2026-06-07T09:15:00Z' },
-  { id: 'wh-002', name: '大额成交通知', url: 'https://hooks.example.com/large-trade', symbols: ['BTC/USDT'], eventTypes: ['large_trade', 'strategy_signal'], rateLimit: 5, enabled: true },
-  { id: 'wh-003', name: '风控事件推送', url: 'https://api.example.com/risk-events', secret: 'sec_****', symbols: [], eventTypes: ['risk_event', 'funding_rate_settle'], rateLimit: 20, enabled: false },
-];
 
 const EVENT_OPTIONS = [
   { value: 'price_breakout', label: '价格突破' }, { value: 'large_trade', label: '大额成交' },
@@ -19,7 +12,7 @@ const EVENT_OPTIONS = [
 ];
 
 export default function WebhookPage() {
-  const [webhooks, setWebhooks] = useState<Webhook[]>(MOCK_WEBHOOKS);
+  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Webhook | null>(null);
   const [form] = Form.useForm();
@@ -47,8 +40,8 @@ export default function WebhookPage() {
   const cols: ColumnsType<Webhook> = [
     { title: '名称', dataIndex: 'name', render: (v: string) => <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{v}</span> },
     { title: 'URL', dataIndex: 'url', width: 260, render: (v: string) => <Tooltip title={v}><span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>{v.length > 35 ? v.slice(0, 35) + '...' : v}</span></Tooltip> },
-    { title: '交易对', dataIndex: 'symbols', width: 160, render: (v: string[]) => v.length === 0 ? <Tag>全部</Tag> : v.map((s) => <Tag key={s}>{s}</Tag>) },
-    { title: '事件类型', dataIndex: 'eventTypes', width: 180, render: (v: string[]) => v.map((t) => <Tag key={t} color="blue">{t.replace('_', ' ')}</Tag>) },
+    { title: '交易对', dataIndex: 'symbols', width: 160, render: (v: string[]) => (v || []).length === 0 ? <Tag>全部</Tag> : v.map((s) => <Tag key={s}>{s}</Tag>) },
+    { title: '事件类型', dataIndex: 'eventTypes', width: 180, render: (v: string[]) => (v || []).map((t) => <Tag key={t} color="blue">{t.replace('_', ' ')}</Tag>) },
     { title: '限速', dataIndex: 'rateLimit', width: 70, render: (v: number) => `${v}/min` },
     { title: '状态', dataIndex: 'enabled', width: 70, render: (v: boolean, r: Webhook) => <Switch checked={v} size="small" onChange={(chk) => setWebhooks((prev) => prev.map((w) => w.id === r.id ? { ...w, enabled: chk } : w))} /> },
     { title: '上次触发', dataIndex: 'lastTriggeredAt', width: 160, render: (v?: string) => v ? new Date(v).toLocaleString('zh-CN') : <span style={{ color: 'var(--text-secondary)' }}>从未</span> },

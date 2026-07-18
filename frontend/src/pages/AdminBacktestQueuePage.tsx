@@ -1,25 +1,56 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, InputNumber, Tag, Space, message, Tooltip } from 'antd';
 import { ReloadOutlined, ArrowUpOutlined, ArrowDownOutlined, CloseCircleOutlined } from '@ant-design/icons';
-import { mockBacktestQueue, mockDelay } from '@/lib/mock';
+import { backtestApi } from '@/lib/api';
 import StatusTag from '@/components/ui/StatusTag';
-import type { BacktestQueueItem } from '@/lib/types';
+import type { BacktestQueueItem, BacktestTask } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
 export default function AdminBacktestQueuePage() {
   const [queue, setQueue] = useState<BacktestQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { mockDelay(mockBacktestQueue(), 400).then((q) => { setQueue(q); setLoading(false); }); }, []);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await backtestApi.getList({ status: 'running' });
+        const tasks = ((res.data as unknown as { items?: BacktestTask[] })?.items
+          || (res.data as unknown as BacktestTask[]) || []) as BacktestTask[];
+        // 将回测任务映射为队列项
+        const items: BacktestQueueItem[] = tasks.map((t) => ({
+          id: t.id,
+          userName: '--',
+          strategyName: t.strategyName,
+          params: t.symbols?.join(', ') || '--',
+          submittedAt: t.createdAt || t.submittedAt || new Date().toISOString(),
+          queueTime: '--',
+          estimatedDuration: '--',
+          status: t.status as BacktestQueueItem['status'],
+          priority: 5,
+        }));
+        setQueue(items);
+      } catch {
+        // 后端未启动时为空
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const updatePriority = (id: string, p: number) => {
     setQueue((prev) => prev.map((q) => q.id === id ? { ...q, priority: p } : q));
     message.success('优先级已更新');
   };
 
-  const forceCancel = (id: string) => {
-    setQueue((prev) => prev.map((q) => q.id === id ? { ...q, status: 'cancelled' } : q));
-    message.success('已强制取消');
+  const forceCancel = async (id: string) => {
+    try {
+      await backtestApi.cancel(id);
+      setQueue((prev) => prev.map((q) => q.id === id ? { ...q, status: 'cancelled' } : q));
+      message.success('已强制取消');
+    } catch {
+      message.error('取消失败');
+    }
   };
 
   const cols: ColumnsType<BacktestQueueItem> = [

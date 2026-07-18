@@ -1,26 +1,33 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, DatePicker, Select, Input, Drawer, message } from 'antd';
 import { ReloadOutlined, EyeOutlined } from '@ant-design/icons';
-import { mockDelay } from '@/lib/mock';
+import { userApi } from '@/lib/api';
 import type { ColumnsType } from 'antd/es/table';
 
 interface AuditLog { id: string; userId: string; userName: string; action: string; resource: string; detail: string; ip: string; time: string; status: string }
 
-const MOCK_LOGS: AuditLog[] = [
-  { id: 'log-001', userId: 'user-001', userName: 'admin', action: '登录', resource: '系统', detail: '管理员登录后台', ip: '192.168.1.100', time: '2026-06-07T10:00:00Z', status: 'success' },
-  { id: 'log-002', userId: 'user-002', userName: 'trader1', action: '创建回测', resource: '回测任务', detail: '创建 EMA金叉策略 回测', ip: '192.168.1.101', time: '2026-06-07T09:45:00Z', status: 'success' },
-  { id: 'log-003', userId: 'user-005', userName: 'user2', action: '删除策略', resource: '策略', detail: '删除 RSI超卖反弹 策略', ip: '192.168.1.105', time: '2026-06-07T09:30:00Z', status: 'success' },
-  { id: 'log-004', userId: 'unknown', userName: '-', action: '登录失败', resource: '认证', detail: '密码错误（第3次）', ip: '10.0.0.55', time: '2026-06-07T09:15:00Z', status: 'failed' },
-  { id: 'log-005', userId: 'user-001', userName: 'admin', action: '修改配置', resource: '系统配置', detail: '修改最大用户数为 500', ip: '192.168.1.100', time: '2026-06-07T08:30:00Z', status: 'success' },
-  { id: 'log-006', userId: 'user-003', userName: 'reviewer', action: '审核策略', resource: '策略', detail: '审核通过「布林带突破」策略文档', ip: '192.168.1.103', time: '2026-06-07T08:00:00Z', status: 'success' },
-];
-
 export default function AdminAuditPage() {
-  const [logs, setLogs] = useState<AuditLog[]>(MOCK_LOGS);
-  const [loading, setLoading] = useState(false);
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [actionFilter, setActionFilter] = useState<string[]>([]);
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await userApi.getAuditLogs({ page_size: 100 });
+        const data = (res.data as unknown as { items?: AuditLog[] })?.items
+          || (res.data as unknown as AuditLog[]) || [];
+        setLogs(Array.isArray(data) ? data : []);
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const filtered = logs.filter((l) => {
     if (search && !l.userName.includes(search) && !l.detail.includes(search)) return false;

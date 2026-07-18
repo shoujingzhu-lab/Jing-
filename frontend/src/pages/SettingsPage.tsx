@@ -1,30 +1,52 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Typography, Card, Tabs, Form, Input, Button, Switch, Select, Table, Tag, Divider, message, Row, Col } from 'antd';
 import { SaveOutlined, LockOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { authApi, userApi } from '@/lib/api';
 import type { ColumnsType } from 'antd/es/table';
 
-const MOCK_SESSIONS = [
-  { id: 's1', device: 'Chrome / Windows', ip: '192.168.1.100', location: '杭州，中国', lastActive: '2026-06-07T10:00:00Z', isCurrent: true },
-  { id: 's2', device: 'Safari / MacOS', ip: '192.168.1.101', location: '杭州，中国', lastActive: '2026-06-06T18:30:00Z', isCurrent: false },
-];
-const LOGIN_HISTORY = [
-  { id: 'h1', ip: '192.168.1.100', location: '杭州，中国', device: 'Chrome / Windows', time: '2026-06-07T10:00:00Z', success: true },
-  { id: 'h2', ip: '10.0.0.55', location: '未知', device: 'Firefox / Linux', time: '2026-06-06T22:15:00Z', success: false },
-  { id: 'h3', ip: '192.168.1.100', location: '杭州，中国', device: 'Chrome / Windows', time: '2026-06-06T08:00:00Z', success: true },
-];
+interface Session { id: string; device: string; ip: string; location: string; lastActive: string; isCurrent: boolean }
+interface LoginRecord { id: string; ip: string; location: string; device: string; time: string; success: boolean }
 
 export default function SettingsPage() {
   const [profileForm] = Form.useForm();
   const [pwdForm] = Form.useForm();
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loginHistory] = useState<LoginRecord[]>([]);
 
-  const handleUpdateProfile = () => {
-    profileForm.validateFields().then(() => message.success('个人资料已更新'));
-  };
-  const handleChangePassword = () => {
-    pwdForm.validateFields().then(() => message.success('密码已修改'));
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await authApi.getSessions();
+        const data = (res.data as unknown as { data: Session[] })?.data
+          || (res.data as unknown as Session[]) || [];
+        setSessions(Array.isArray(data) ? data : []);
+      } catch {
+        // 后端未启动
+      }
+    };
+    load();
+  }, []);
+
+  const handleUpdateProfile = async () => {
+    try {
+      await profileForm.validateFields();
+      message.success('个人资料已更新');
+    } catch { /* 表单验证失败 */ }
   };
 
-  const sessionCols: ColumnsType<typeof MOCK_SESSIONS[0]> = [
+  const handleChangePassword = async () => {
+    try {
+      const vals = await pwdForm.validateFields();
+      await userApi.changePassword(vals.oldPassword, vals.newPassword);
+      message.success('密码已修改');
+      pwdForm.resetFields();
+    } catch (e) {
+      if (e && typeof e === 'object' && 'errorFields' in e) return;
+      message.error('密码修改失败');
+    }
+  };
+
+  const sessionCols: ColumnsType<Session> = [
     { title: '设备', dataIndex: 'device' },
     { title: 'IP', dataIndex: 'ip', render: (v: string) => <code>{v}</code> },
     { title: '位置', dataIndex: 'location' },
@@ -32,7 +54,7 @@ export default function SettingsPage() {
     { title: '当前', dataIndex: 'isCurrent', width: 80, render: (v: boolean) => v ? <Tag color="green">当前</Tag> : <Button size="small" danger onClick={() => message.success('会话已注销')}>注销</Button> },
   ];
 
-  const loginCols: ColumnsType<typeof LOGIN_HISTORY[0]> = [
+  const loginCols: ColumnsType<LoginRecord> = [
     { title: '时间', dataIndex: 'time', render: (v: string) => new Date(v).toLocaleString('zh-CN') },
     { title: 'IP', dataIndex: 'ip', render: (v: string) => <code>{v}</code> },
     { title: '位置', dataIndex: 'location' },
@@ -85,7 +107,7 @@ export default function SettingsPage() {
         {
           key: 'sessions', label: '会话管理', children: (
             <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-              <Table columns={sessionCols} dataSource={MOCK_SESSIONS} rowKey="id" pagination={false} size="middle" />
+              <Table columns={sessionCols} dataSource={sessions} rowKey="id" pagination={false} size="middle" />
               <Divider />
               <Button danger icon={<LogoutOutlined />} onClick={() => message.success('所有其他会话已注销')}>注销其他会话</Button>
             </Card>
@@ -94,7 +116,7 @@ export default function SettingsPage() {
         {
           key: 'login-history', label: '登录历史', children: (
             <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-              <Table columns={loginCols} dataSource={LOGIN_HISTORY} rowKey="id" pagination={{ pageSize: 10 }} size="middle" />
+              <Table columns={loginCols} dataSource={loginHistory} rowKey="id" pagination={{ pageSize: 10 }} size="middle" />
             </Card>
           ),
         },

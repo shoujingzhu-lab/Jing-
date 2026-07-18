@@ -1,5 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { Radio, Space, Typography } from 'antd';
+import { createChart, ColorType, CandlestickSeries, HistogramSeries } from 'lightweight-charts';
+import type { UTCTimestamp } from 'lightweight-charts';
 import type { Kline, KlinePeriod } from '@/lib/types';
 
 interface Props {
@@ -10,84 +12,94 @@ interface Props {
 
 export default function KlineChart({ data }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const chartRef = useRef<any>(null);
   const [period, setPeriod] = useState<KlinePeriod>('1h');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || !data.length) return;
 
-    const drawChart = async () => {
-      // 动态导入 lightweight-charts (仅客户端)
-      try {
-        const { createChart, ColorType } = await import('lightweight-charts');
-        containerRef.current!.innerHTML = '';
+    // 清理旧图表
+    if (chartRef.current) {
+      try { chartRef.current.remove(); } catch { /* ignore */ }
+      chartRef.current = null;
+    }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const chart: any = createChart(containerRef.current!, {
-          layout: {
-            background: { type: ColorType.Solid, color: '#161B22' },
-            textColor: '#8B949E',
-          },
-          grid: {
-            vertLines: { color: '#21262D' },
-            horzLines: { color: '#21262D' },
-          },
-          crosshair: { mode: 0 },
-          timeScale: { borderColor: '#30363D', timeVisible: true },
-          rightPriceScale: { borderColor: '#30363D' },
-          width: containerRef.current!.clientWidth,
-          height: containerRef.current!.clientHeight,
-        });
+    try {
+      const container = containerRef.current;
+      const width = container.clientWidth || 800;
 
-        const candleSeries = chart.addCandlestickSeries({
-          upColor: '#26A69A',
-          downColor: '#EF5350',
-          borderUpColor: '#26A69A',
-          borderDownColor: '#EF5350',
-          wickUpColor: '#26A69A',
-          wickDownColor: '#EF5350',
-        });
+      const chart = createChart(container, {
+        layout: {
+          background: { type: ColorType.Solid, color: '#161B22' },
+          textColor: '#8B949E',
+        },
+        grid: {
+          vertLines: { color: '#21262D' },
+          horzLines: { color: '#21262D' },
+        },
+        crosshair: { mode: 0 },
+        timeScale: { borderColor: '#30363D', timeVisible: true },
+        rightPriceScale: { borderColor: '#30363D' },
+        width,
+        height: 450,
+      });
 
-        const chartData = data.map((k) => ({
-          time: (k.openTime / 1000) as import('lightweight-charts').UTCTimestamp,
+      // v5 API: addSeries(SeriesClass, options)
+      const candleSeries = chart.addSeries(CandlestickSeries, {
+        upColor: '#26A69A',
+        downColor: '#EF5350',
+        borderUpColor: '#26A69A',
+        borderDownColor: '#EF5350',
+        wickUpColor: '#26A69A',
+        wickDownColor: '#EF5350',
+      });
+
+      candleSeries.setData(
+        data.map((k) => ({
+          time: (k.openTime / 1000) as UTCTimestamp,
           open: k.open,
           high: k.high,
           low: k.low,
           close: k.close,
-        }));
+        }))
+      );
 
-        candleSeries.setData(chartData);
+      const volumeSeries = chart.addSeries(HistogramSeries, {
+        color: '#26A69A',
+        priceFormat: { type: 'volume' },
+        priceScaleId: '',
+      });
+      volumeSeries.priceScale().applyOptions({
+        scaleMargins: { top: 0.8, bottom: 0 },
+      });
+      volumeSeries.setData(
+        data.map((k) => ({
+          time: (k.openTime / 1000) as UTCTimestamp,
+          value: k.volume,
+          color: k.close >= k.open ? 'rgba(38,166,154,0.4)' : 'rgba(239,83,80,0.4)',
+        }))
+      );
 
-        // 成交量
-        const volumeSeries = chart.addHistogramSeries({
-          color: '#26A69A',
-          priceFormat: { type: 'volume' },
-          priceScaleId: '',
-        });
-        volumeSeries.priceScale().applyOptions({
-          scaleMargins: { top: 0.8, bottom: 0 },
-        });
-        volumeSeries.setData(
-          data.map((k) => ({
-            time: (k.openTime / 1000) as import('lightweight-charts').UTCTimestamp,
-            value: k.volume,
-            color: k.close >= k.open ? 'rgba(38,166,154,0.4)' : 'rgba(239,83,80,0.4)',
-          }))
-        );
+      const handleResize = () => {
+        if (container) {
+          chart.applyOptions({ width: container.clientWidth || 800 });
+        }
+      };
+      window.addEventListener('resize', handleResize);
 
-        // 响应式
-        const handleResize = () => {
-          if (containerRef.current) {
-            chart.applyOptions({ width: containerRef.current.clientWidth });
-          }
-        };
-        window.addEventListener('resize', handleResize);
-        return () => { window.removeEventListener('resize', handleResize); chart.remove(); };
-      } catch {
-        containerRef.current!.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-secondary)">📊 K线图组件加载中...</div>';
-      }
-    };
+      chartRef.current = chart;
+      setError(null);
 
-    drawChart();
+      return () => {
+        window.removeEventListener('resize', handleResize);
+        try { chart.remove(); } catch { /* ignore */ }
+      };
+    } catch (e) {
+      console.error('KlineChart render error:', e);
+      setError(`K线图加载失败: ${(e as Error).message?.slice(0, 50) || '未知错误'}`);
+    }
   }, [data, period]);
 
   return (
@@ -106,7 +118,13 @@ export default function KlineChart({ data }: Props) {
           <Radio.Button value="1w">1w</Radio.Button>
         </Radio.Group>
       </div>
-      <div ref={containerRef} style={{ width: '100%', height: 450, borderRadius: 6, overflow: 'hidden' }} />
+      {error ? (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 450, color: 'var(--text-secondary)', fontSize: 13, background: 'var(--bg-secondary)', borderRadius: 6 }}>
+          ⚠️ {error}
+        </div>
+      ) : (
+        <div ref={containerRef} style={{ width: '100%', height: 450, borderRadius: 6, overflow: 'hidden' }} />
+      )}
     </div>
   );
 }

@@ -2,41 +2,44 @@ import { useState, useEffect } from 'react';
 import { Typography, Card, Row, Col, Table, Button, Space, Select, DatePicker, Tag, Progress, message, Form, InputNumber } from 'antd';
 import { DownloadOutlined, ReloadOutlined, PlusOutlined, CopyOutlined } from '@ant-design/icons';
 import { EXCHANGES, KLINE_PERIODS } from '@/lib/constants';
+import { dataApi } from '@/lib/api';
 import EmptyState from '@/components/ui/EmptyState';
 import StatusTag from '@/components/ui/StatusTag';
 import type { DownloadTask, DataDownloadRequest } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
-const MOCK_TASKS: DownloadTask[] = [
-  { id: 'dl-001', request: { exchange: 'binance', symbols: ['BTC/USDT'], dataType: 'kline', period: '1h', startDate: '2025-01-01', endDate: '2025-12-31', format: 'csv' }, status: 'completed', progress: 100, downloadUrl: '#', createdAt: '2026-06-07T08:00:00Z', completedAt: '2026-06-07T08:05:00Z' },
-  { id: 'dl-002', request: { exchange: 'okx', symbols: ['ETH/USDT', 'SOL/USDT'], dataType: 'orderbook', startDate: '2025-06-01', endDate: '2026-06-01', format: 'parquet' }, status: 'generating', progress: 62, createdAt: '2026-06-07T10:00:00Z' },
-  { id: 'dl-003', request: { exchange: 'bybit', symbols: ['BNB/USDT'], dataType: 'trade', startDate: '2025-01-01', endDate: '2025-06-30', format: 'json' }, status: 'pending', progress: 0, createdAt: '2026-06-07T10:30:00Z' },
-];
-
 export default function DataCenterPage() {
-  const [tasks, setTasks] = useState<DownloadTask[]>(MOCK_TASKS);
+  const [tasks, setTasks] = useState<DownloadTask[]>([]);
   const [loading, setLoading] = useState(false);
 
   const [exchange, setExchange] = useState<string>('binance');
-  const [symbols, setSymbols] = useState<string[]>(['BTC/USDT']);
+  const [symbols, setSymbols] = useState<string[]>(['BTCUSDT']);
   const [dataType, setDataType] = useState<string>('kline');
   const [period, setPeriod] = useState<string>('1h');
-  const [format, setFormat] = useState<string>('csv');
+  const [format, setFormat] = useState<string>('json');
   const [startDate, setStartDate] = useState('2025-01-01');
   const [endDate, setEndDate] = useState('2025-12-31');
 
-  const handleDownload = () => {
-    const newTask: DownloadTask = {
-      id: `dl-${Date.now()}`, request: {
-        exchange: exchange as 'binance', symbols,
-        dataType: dataType as 'kline', period: dataType === 'kline' ? (period as '1h') : undefined,
-        startDate, endDate, format: format as 'csv',
-      },
-      status: 'pending', progress: 0,
-      createdAt: new Date().toISOString(),
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    message.success('下载任务已创建');
+  const handleDownload = async () => {
+    try {
+      const res = await dataApi.download({
+        exchange, symbol: symbols[0] || 'BTCUSDT',
+        interval: period, start_date: startDate + 'T00:00:00', end_date: endDate + 'T00:00:00', format,
+      });
+      const newTask: DownloadTask = {
+        id: `dl-${Date.now()}`, request: {
+          exchange: exchange as 'binance', symbols,
+          dataType: dataType as 'kline', period: dataType === 'kline' ? (period as '1h') : undefined,
+          startDate, endDate, format: format as 'csv',
+        },
+        status: 'pending', progress: 0,
+        createdAt: new Date().toISOString(),
+      };
+      setTasks((prev) => [newTask, ...prev]);
+      message.success('下载任务已提交');
+    } catch {
+      message.error('提交失败，请确认后端服务已启动');
+    }
   };
 
   const taskCols: ColumnsType<DownloadTask> = [
@@ -66,7 +69,7 @@ export default function DataCenterPage() {
           <Col xs={24} sm={12} md={6}>
             <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontSize: 13 }}>交易对</div>
             <Select mode="tags" value={symbols} onChange={setSymbols} style={{ width: '100%' }} placeholder="输入交易对"
-              options={['BTC/USDT','ETH/USDT','SOL/USDT','BNB/USDT','XRP/USDT','DOGE/USDT','AVAX/USDT','LINK/USDT'].map((s) => ({ value: s, label: s }))} />
+              options={['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','AVAXUSDT','LINKUSDT'].map((s) => ({ value: s, label: s }))} />
           </Col>
           <Col xs={12} sm={6} md={3}>
             <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontSize: 13 }}>数据类型</div>

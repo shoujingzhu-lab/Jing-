@@ -4,7 +4,7 @@ import { WarningOutlined, StopOutlined, LockOutlined, ReloadOutlined, SafetyOutl
 import StatCard from '@/components/ui/StatCard';
 import StatusTag from '@/components/ui/StatusTag';
 import BaseChart from '@/components/Chart/BaseChart';
-import { mockRiskOverview, mockStrategyRisks, mockRiskPositions, mockRiskEvents, mockRiskRules, mockMeltdownStatus, mockDelay } from '@/lib/mock';
+import { riskApi, strategyApi } from '@/lib/api';
 import type { RiskOverview, StrategyRisk, Position, RiskEvent, RiskRuleConfig, MeltdownStatus } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -19,16 +19,59 @@ export default function RiskPanelPage() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [ov, st, po, ev, ru, me] = await Promise.all([
-      mockDelay(mockRiskOverview(), 200),
-      mockDelay(mockStrategyRisks(), 250),
-      mockDelay(mockRiskPositions(), 250),
-      mockDelay(mockRiskEvents(), 200),
-      mockDelay(mockRiskRules(), 150),
-      mockDelay(mockMeltdownStatus(), 150),
-    ]);
-    setOverview(ov); setStrategies(st); setPositions(po); setEvents(ev); setRules(ru); setMeltdown(me);
-    setLoading(false);
+    try {
+      const [dashboardRes, rulesRes, eventsRes, circuitRes] = await Promise.allSettled([
+        riskApi.getDashboard(),
+        riskApi.getRules(),
+        riskApi.getEvents({ page_size: 50 }),
+        riskApi.getCircuitBreakers(),
+      ]);
+
+      // 解析风控仪表盘
+      if (dashboardRes.status === 'fulfilled') {
+        const d = (dashboardRes.value.data as unknown as { data: RiskOverview })?.data
+          || (dashboardRes.value.data as unknown as RiskOverview);
+        setOverview(d as RiskOverview);
+      }
+
+      // 解析风控规则
+      if (rulesRes.status === 'fulfilled') {
+        const r = (rulesRes.value.data as unknown as { data: unknown[] })?.data
+          || rulesRes.value.data;
+        if (Array.isArray(r) && r.length > 0) {
+          setRules(r[0] as unknown as RiskRuleConfig);
+        }
+      }
+
+      // 解析风控事件
+      if (eventsRes.status === 'fulfilled') {
+        const ev = (eventsRes.value.data as unknown as { items?: RiskEvent[] })?.items
+          || (eventsRes.value.data as unknown as RiskEvent[]) || [];
+        setEvents(Array.isArray(ev) ? ev : []);
+      }
+
+      // 解析熔断器
+      if (circuitRes.status === 'fulfilled') {
+        const cb = (circuitRes.value.data as unknown as { data: unknown[] })?.data
+          || (circuitRes.value.data as unknown as unknown[]) || [];
+        if (Array.isArray(cb) && cb.length > 0) {
+          const activeMeltdown = cb.find((c: unknown) => (c as MeltdownStatus).isActive);
+          setMeltdown(activeMeltdown ? (activeMeltdown as MeltdownStatus).isActive ? activeMeltdown as MeltdownStatus : null : null);
+        }
+      }
+
+      // 默认值兜底
+      if (!overview) {
+        setOverview({
+          totalExposure: 0, marginUsageRatio: 0, currentDrawdown: 0,
+          activeAlerts: 0, riskLevel: 'safe',
+        } as RiskOverview);
+      }
+    } catch {
+      message.error('加载风控数据失败，请确认后端服务已启动');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -38,7 +81,7 @@ export default function RiskPanelPage() {
     Modal.confirm({
       title: '确认解除熔断？', content: '请确认已排查根本原因。解除后策略将恢复运行，冷却期 12 小时。',
       okText: '确认解除', cancelText: '取消', okButtonProps: { danger: true },
-      onOk: () => { setMeltdown({ isActive: false, affectedStrategies: [] }); message.success('熔断已解除'); },
+      onOk: () => { setMeltdown(null); message.success('熔断已解除'); },
     });
   };
 
@@ -55,10 +98,10 @@ export default function RiskPanelPage() {
   const strategyCols: ColumnsType<StrategyRisk> = [
     { title: '策略', dataIndex: 'strategyName', render: (v: string) => <a style={{ color: 'var(--gold)' }}>{v}</a> },
     { title: '状态', dataIndex: 'status', width: 90, render: (v: string) => <StatusTag status={v} statusMap={{ draft: { label: '草稿', color: 'default' }, live: { label: '实盘', color: 'green' }, simulating: { label: '模拟', color: 'blue' }, paused: { label: '暂停', color: 'warning' }, archived: { label: '归档', color: 'default' } } as Record<string, { label: string; color: string }>} /> },
-    { title: '今日盈亏', dataIndex: 'todayPnl', render: (v: number) => <span style={{ color: v >= 0 ? 'var(--green-trade)' : 'var(--red-trade)' }}>${v.toFixed(2)}</span> },
-    { title: '日亏损上限', dataIndex: 'dailyLossLimit', render: (v: number) => `$${v.toLocaleString()}` },
-    { title: '已用/上限', render: (_: unknown, r: StrategyRisk) => <span style={{ color: r.dailyLossUsed > r.dailyLossLimit * 0.8 ? 'var(--red-trade)' : 'var(--text-secondary)' }}>${r.dailyLossUsed} / ${r.dailyLossLimit}</span> },
-    { title: '连续亏损', render: (_: unknown, r: StrategyRisk) => <span style={{ color: r.consecutiveLosses >= r.maxConsecutiveLosses ? 'var(--red-trade)' : 'var(--text-primary)' }}>{r.consecutiveLosses}/{r.maxConsecutiveLosses}</span> },
+    { title: '今日盈亏', dataIndex: 'todayPnl', render: (v: number) => <span style={{ color: v >= 0 ? 'var(--green-trade)' : 'var(--red-trade)' }}>${(v ?? 0).toFixed(2)}</span> },
+    { title: '日亏损上限', dataIndex: 'dailyLossLimit', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
+    { title: '已用/上限', render: (_: unknown, r: StrategyRisk) => <span style={{ color: (r.dailyLossUsed ?? 0) > (r.dailyLossLimit ?? 0) * 0.8 ? 'var(--red-trade)' : 'var(--text-secondary)' }}>${r.dailyLossUsed ?? 0} / ${r.dailyLossLimit ?? 0}</span> },
+    { title: '连续亏损', render: (_: unknown, r: StrategyRisk) => <span style={{ color: (r.consecutiveLosses ?? 0) >= (r.maxConsecutiveLosses ?? 0) ? 'var(--red-trade)' : 'var(--text-primary)' }}>{r.consecutiveLosses ?? 0}/{r.maxConsecutiveLosses ?? 0}</span> },
     { title: '操作', width: 100, render: (_: unknown, r: StrategyRisk) => (
       <Space size="small">
         <Button size="small" danger={r.status === 'live'} icon={r.status === 'live' ? <StopOutlined /> : undefined} onClick={() => message.info(r.status === 'live' ? '策略已暂停' : '操作完成')}>{r.status === 'live' ? '暂停' : '恢复'}</Button>
@@ -72,7 +115,10 @@ export default function RiskPanelPage() {
     { title: '数量', dataIndex: 'quantity' },
     { title: '保证金率', dataIndex: 'marginRatio', render: (v: number) => <span style={{ color: v > 0.7 ? 'var(--red-trade)' : v > 0.4 ? '#FF9800' : 'var(--green-trade)', fontWeight: v > 0.7 ? 'bold' : 'normal' }}>{(v * 100).toFixed(1)}%</span> },
     { title: '距强平%', render: (_: unknown, r: Position) => {
-      const dist = r.side === 'long' ? ((r.markPrice - r.liquidationPrice) / r.markPrice * 100) : ((r.liquidationPrice - r.markPrice) / r.markPrice * 100);
+      const markPrice = r.markPrice ?? 0;
+      const liqPrice = r.liquidationPrice ?? 0;
+      if (markPrice === 0) return '-';
+      const dist = r.side === 'long' ? ((markPrice - liqPrice) / markPrice * 100) : ((liqPrice - markPrice) / markPrice * 100);
       return <span style={{ color: dist < 5 ? 'var(--red-trade)' : dist < 15 ? '#FF9800' : 'var(--green-trade)', fontWeight: dist < 10 ? 'bold' : 'normal' }}>{dist.toFixed(1)}%</span>;
     }},
     { title: '止损价', render: (_: unknown, r: Position) => r.stopLoss ? `$${r.stopLoss.toLocaleString()}` : <Tag>未设置</Tag> },
@@ -90,7 +136,7 @@ export default function RiskPanelPage() {
       {meltdown?.isActive && (
         <Alert
           type="error" banner showIcon icon={<WarningOutlined />}
-          message={<span>⚠️ <strong>熔断已触发</strong> — {meltdown.reason}，影响策略：{meltdown.affectedStrategies.join(', ')}。冷却至 {meltdown.cooldownEnd ? new Date(meltdown.cooldownEnd).toLocaleString('zh-CN') : '—'}</span>}
+          message={<span>⚠️ <strong>熔断已触发</strong> — {meltdown.reason}，影响策略：{meltdown.affectedStrategies?.join(', ')}。冷却至 {meltdown.cooldownEnd ? new Date(meltdown.cooldownEnd).toLocaleString('zh-CN') : '—'}</span>}
           action={<Button danger size="small" icon={<LockOutlined />} onClick={handleRecover}>解除熔断</Button>}
           style={{ marginBottom: 16, border: '2px solid var(--red-trade)', borderRadius: 6 }}
         />
@@ -108,30 +154,30 @@ export default function RiskPanelPage() {
 
       {/* 概览卡片 */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={8} lg={5}><StatCard title="总敞口" value={overview.totalExposure} format="usdt" /></Col>
-        <Col xs={12} sm={8} lg={5}><StatCard title="保证金使用率" value={overview.marginUsageRatio * 100} format="percent" trend={overview.marginUsageRatio > 0.7 ? 'down' : 'up'} /></Col>
-        <Col xs={12} sm={8} lg={5}><StatCard title="当前回撤" value={overview.currentDrawdown * 100} format="percent" trend="down" /></Col>
-        <Col xs={12} sm={8} lg={5}><StatCard title="活跃告警" value={overview.activeAlerts} format="number" trend={overview.activeAlerts > 0 ? 'down' : 'flat'} /></Col>
+        <Col xs={12} sm={8} lg={5}><StatCard title="总敞口" value={overview.totalExposure ?? 0} format="usdt" /></Col>
+        <Col xs={12} sm={8} lg={5}><StatCard title="保证金使用率" value={(overview.marginUsageRatio ?? 0) * 100} format="percent" trend={overview.marginUsageRatio > 0.7 ? 'down' : 'up'} /></Col>
+        <Col xs={12} sm={8} lg={5}><StatCard title="当前回撤" value={(overview.currentDrawdown ?? 0) * 100} format="percent" trend="down" /></Col>
+        <Col xs={12} sm={8} lg={5}><StatCard title="活跃告警" value={overview.activeAlerts ?? 0} format="number" trend={overview.activeAlerts > 0 ? 'down' : 'flat'} /></Col>
       </Row>
 
       {/* 风控仪表盘（Gauge 图） */}
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} md={8}>
           <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            <BaseChart option={gaugeOption(overview.marginUsageRatio * 100, 100, '保证金率', overview.marginUsageRatio > 0.7 ? '#EF5350' : '#F0B90B')} height={220} />
+            <BaseChart option={gaugeOption((overview.marginUsageRatio ?? 0) * 100, 100, '保证金率', overview.marginUsageRatio > 0.7 ? '#EF5350' : '#F0B90B')} height={220} />
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            <BaseChart option={gaugeOption(overview.currentDrawdown * 100, 50, '最大回撤', overview.currentDrawdown > 0.15 ? '#EF5350' : '#F0B90B')} height={220} />
+            <BaseChart option={gaugeOption((overview.currentDrawdown ?? 0) * 100, 50, '最大回撤', overview.currentDrawdown > 0.15 ? '#EF5350' : '#F0B90B')} height={220} />
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
             <div style={{ padding: 20 }}>
               <Typography.Title level={5} style={{ color: 'var(--text-primary)', marginBottom: 16 }}>风控规则配置</Typography.Title>
-              <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>默认止损: {rules ? (rules.defaultStopLoss * 100).toFixed(0) : '—'}%</span><Slider min={1} max={15} defaultValue={rules?.defaultStopLoss ? rules.defaultStopLoss * 100 : 5} tooltip={{ formatter: (v) => `${v}%` }} /></div>
-              <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>默认止盈: {rules ? (rules.defaultTakeProfit * 100).toFixed(0) : '—'}%</span><Slider min={5} max={50} defaultValue={rules?.defaultTakeProfit ? rules.defaultTakeProfit * 100 : 15} tooltip={{ formatter: (v) => `${v}%` }} /></div>
+              <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>默认止损: {rules ? ((rules.defaultStopLoss ?? 0) * 100).toFixed(0) : '—'}%</span><Slider min={1} max={15} defaultValue={rules?.defaultStopLoss ? rules.defaultStopLoss * 100 : 5} tooltip={{ formatter: (v) => `${v}%` }} /></div>
+              <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>默认止盈: {rules ? ((rules.defaultTakeProfit ?? 0) * 100).toFixed(0) : '—'}%</span><Slider min={5} max={50} defaultValue={rules?.defaultTakeProfit ? rules.defaultTakeProfit * 100 : 15} tooltip={{ formatter: (v) => `${v}%` }} /></div>
               <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>日亏损上限</span><InputNumber style={{ width: '100%' }} defaultValue={rules?.dailyLossLimit || 2000} prefix="$" /></div>
               <div style={{ marginBottom: 12 }}><span style={{ color: 'var(--text-secondary)' }}>最大杠杆</span><Select defaultValue={rules?.maxLeverage || 10} style={{ width: '100%' }} options={[1, 2, 3, 5, 10, 20, 50, 100].map((v) => ({ value: v, label: `${v}x` }))} /></div>
               <div><span style={{ color: 'var(--text-secondary)' }}>最大回撤限制</span><InputNumber style={{ width: '100%' }} defaultValue={rules?.maxDrawdownLimit ? rules.maxDrawdownLimit * 100 : 25} suffix="%" /></div>
@@ -142,13 +188,13 @@ export default function RiskPanelPage() {
         </Col>
       </Row>
 
-      {/* 策略风控表 — 带聚合汇总行 */}
+      {/* 策略风控表 */}
       <Card title="策略风控" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
         <Table
           columns={strategyCols} dataSource={strategies} rowKey="strategyId" pagination={false} size="middle" scroll={{ x: 900 }}
           summary={() => {
-            const totalPnl = strategies.reduce((s, r) => s + r.todayPnl, 0);
-            const totalLossUsed = strategies.reduce((s, r) => s + r.dailyLossUsed, 0);
+            const totalPnl = strategies.reduce((s, r) => s + (r.todayPnl ?? 0), 0);
+            const totalLossUsed = strategies.reduce((s, r) => s + (r.dailyLossUsed ?? 0), 0);
             const riskLevel: string = totalPnl < -500 ? '⚠️ 高危' : totalPnl < 0 ? '⚡ 警告' : '✅ 正常';
             return (
               <Table.Summary.Row style={{ background: totalPnl < 0 ? 'rgba(239,83,80,0.08)' : 'rgba(38,166,154,0.08)' }}>

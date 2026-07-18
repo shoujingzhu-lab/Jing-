@@ -1,27 +1,40 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Row, Col, Card, Typography, Button, Table, Tag, Modal, Form, Input, InputNumber, Select, Space, message } from 'antd';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import StatCard from '@/components/ui/StatCard';
 import EmptyState from '@/components/ui/EmptyState';
+import { simApi } from '@/lib/api';
 import { formatUSDT, formatPercent } from '@/lib/utils/format';
-
-const MOCK_ACCOUNTS = [
-  { id: 's1', name: 'BTC 网格策略', type: 'spot', exchange: 'binance', initialCapital: 10000, currentEquity: 12350, availableMargin: 8900, usedMargin: 3450, todayPnl: 125, totalReturnPercent: 23.5, activeStrategies: 1, createdAt: '2026-05-01' },
-  { id: 's2', name: 'ETH 趋势跟随', type: 'contract', exchange: 'okx', initialCapital: 20000, currentEquity: 21800, availableMargin: 15200, usedMargin: 6600, todayPnl: -45, totalReturnPercent: 9.0, activeStrategies: 1, createdAt: '2026-05-15' },
-  { id: 's3', name: '多策略组合测试', type: 'spot', exchange: 'binance', initialCapital: 50000, currentEquity: 51200, availableMargin: 38000, usedMargin: 13200, todayPnl: 200, totalReturnPercent: 2.4, activeStrategies: 2, createdAt: '2026-06-01' },
-];
+import type { TradingAccount } from '@/lib/types';
 
 export default function SimOverviewPage() {
   const navigate = useNavigate();
-  const [accounts] = useState(MOCK_ACCOUNTS);
+  const [accounts, setAccounts] = useState<TradingAccount[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [form] = Form.useForm();
 
-  const totalEquity = accounts.reduce((s, a) => s + a.currentEquity, 0);
-  const totalTodayPnl = accounts.reduce((s, a) => s + a.todayPnl, 0);
-  const totalAvailable = accounts.reduce((s, a) => s + a.availableMargin, 0);
-  const totalUsed = accounts.reduce((s, a) => s + a.usedMargin, 0);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await simApi.getAccounts();
+        const data = (res.data as unknown as { data: TradingAccount[] })?.data
+          || (res.data as unknown as TradingAccount[]) || [];
+        setAccounts(Array.isArray(data) ? data : []);
+      } catch {
+        // 后端未启动或暂无数据
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const totalEquity = accounts.reduce((s, a) => s + (a.currentEquity ?? 0), 0);
+  const totalTodayPnl = accounts.reduce((s, a) => s + (a.todayPnl ?? 0), 0);
+  const totalAvailable = accounts.reduce((s, a) => s + (a.availableMargin ?? 0), 0);
+  const totalUsed = accounts.reduce((s, a) => s + (a.usedMargin ?? 0), 0);
 
   return (
     <div>
@@ -47,17 +60,17 @@ export default function SimOverviewPage() {
       </Row>
 
       <Card title="模拟账户" style={{ marginTop: 16, background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-        {accounts.length === 0 ? (
+        {!loading && accounts.length === 0 ? (
           <EmptyState title="还没有模拟账户" description="创建模拟账户来测试你的策略" actionText="新建模拟账户" onAction={() => setShowCreate(true)} />
         ) : (
-          <Table dataSource={accounts} rowKey="id" size="small" pagination={false}
+          <Table dataSource={accounts} rowKey="id" size="small" loading={loading} pagination={false}
             onRow={(r) => ({ onClick: () => navigate(`/sim/${r.id}`), style: { cursor: 'pointer' } })}
             columns={[
-              { title: '名称', dataIndex: 'name', key: 'name', render: (n: string, r: { id: string }) => <a style={{ fontWeight: 500 }} onClick={() => navigate(`/sim/${r.id}`)}>{n}</a> },
+              { title: '名称', dataIndex: 'name', key: 'name', render: (n: string, r: TradingAccount) => <a style={{ fontWeight: 500 }} onClick={() => navigate(`/sim/${r.id}`)}>{n}</a> },
               { title: '类型', dataIndex: 'type', key: 'type', width: 80, render: (t: string) => <Tag>{t === 'spot' ? '现货' : '合约'}</Tag> },
-              { title: '初始资金', dataIndex: 'initialCapital', key: 'initialCapital', render: (v: number) => formatUSDT(v) },
-              { title: '当前净值', dataIndex: 'currentEquity', key: 'currentEquity', render: (v: number) => <span style={{ fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{formatUSDT(v)}</span> },
-              { title: '收益率', dataIndex: 'totalReturnPercent', key: 'totalReturnPercent', render: (v: number) => <span style={{ color: v >= 0 ? 'var(--green-trade)' : 'var(--red-trade)', fontWeight: 600 }}>{v >= 0 ? '+' : ''}{v.toFixed(2)}%</span> },
+              { title: '初始资金', dataIndex: 'initialCapital', key: 'initialCapital', render: (v: number) => formatUSDT(v ?? 0) },
+              { title: '当前净值', dataIndex: 'currentEquity', key: 'currentEquity', render: (v: number) => <span style={{ fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{formatUSDT(v ?? 0)}</span> },
+              { title: '收益率', dataIndex: 'totalReturnPercent', key: 'totalReturnPercent', render: (v: number) => <span style={{ color: (v ?? 0) >= 0 ? 'var(--green-trade)' : 'var(--red-trade)', fontWeight: 600 }}>{(v ?? 0) >= 0 ? '+' : ''}{(v ?? 0).toFixed(2)}%</span> },
               { title: '策略数', dataIndex: 'activeStrategies', key: 'activeStrategies' },
               { title: '操作', key: 'actions', width: 100, render: () => <Button size="small" type="link" danger icon={<DeleteOutlined />}>删除</Button> },
             ]}
@@ -66,7 +79,21 @@ export default function SimOverviewPage() {
       </Card>
 
       <Modal title="新建模拟账户" open={showCreate} onCancel={() => setShowCreate(false)}
-        onOk={() => { message.success('账户创建成功'); setShowCreate(false); }}>
+        onOk={async () => {
+          try {
+            const vals = await form.validateFields();
+            await simApi.createAccount({ name: vals.name, account_type: vals.type, initial_capital: vals.initialCapital });
+            message.success('账户创建成功');
+            setShowCreate(false);
+            // 刷新列表
+            const res = await simApi.getAccounts();
+            const data = (res.data as unknown as { data: TradingAccount[] })?.data
+              || (res.data as unknown as TradingAccount[]) || [];
+            setAccounts(Array.isArray(data) ? data : []);
+          } catch {
+            message.error('创建失败');
+          }
+        }}>
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="账户名称" rules={[{ required: true }]}><Input placeholder="如：BTC 网格策略测试" /></Form.Item>
           <Form.Item name="type" label="账户类型" rules={[{ required: true }]}>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, Select, Input, Modal, message } from 'antd';
 import { ReloadOutlined, EditOutlined, StopOutlined } from '@ant-design/icons';
-import { mockUsers, mockDelay } from '@/lib/mock';
+import { userApi } from '@/lib/api';
 import type { User, UserRole } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -15,7 +15,22 @@ export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole[]>([]);
 
-  useEffect(() => { mockDelay(mockUsers(), 400).then((u) => { setUsers(u); setLoading(false); }); }, []);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        // 用户列表暂通过审计日志间接获取，或待后端提供专门的用户管理API
+        const res = await userApi.getAuditLogs({ page_size: 100 });
+        // 审计日志中包含用户信息
+        const data = res.data;
+        setUsers([]);
+      } catch {
+        // 用户管理API待后端实现
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const updateRole = (id: string, role: UserRole) => {
     setUsers((prev) => prev.map((u) => u.id === id ? { ...u, role } : u));
@@ -23,7 +38,7 @@ export default function AdminUsersPage() {
   };
 
   const toggleUser = (id: string) => {
-    setUsers((prev) => prev.map((u) => u.id === id ? { ...u, /* disabled toggle */ } : u));
+    setUsers((prev) => prev.map((u) => u.id === id ? { ...u } : u));
     message.success('用户状态已更新');
   };
 

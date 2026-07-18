@@ -1,206 +1,232 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Ticker, Kline, OrderBook, TradeTick, FundingRate } from '@/lib/types';
 import { useMarketStore } from '@/stores/marketStore';
+import { dataApi } from '@/lib/api';
 
-// ========== 模拟行情数据 ==========
-
-const SYMBOLS_BASE = [
-  'BTC/USDT', 'ETH/USDT', 'SOL/USDT', 'BNB/USDT', 'XRP/USDT', 'DOGE/USDT',
-  'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT', 'UNI/USDT',
-  'ATOM/USDT', 'LTC/USDT', 'ETC/USDT', 'OP/USDT', 'ARB/USDT', 'APT/USDT',
-  'FIL/USDT', 'NEAR/USDT', 'INJ/USDT', 'RUNE/USDT', 'FTM/USDT', 'AAVE/USDT',
-  'ALGO/USDT', 'GRT/USDT', 'SAND/USDT', 'MANA/USDT', 'ENJ/USDT', 'GALA/USDT',
+/** 默认行情列表 */
+const DEFAULT_SYMBOLS = [
+  'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT',
+  'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'MATICUSDT', 'LINKUSDT', 'UNIUSDT',
+  'ATOMUSDT', 'LTCUSDT', 'ETCUSDT', 'OPUSDT', 'ARBUSDT', 'APTUSDT',
+  'FILUSDT', 'NEARUSDT', 'INJUSDT', 'RUNEUSDT', 'FTMUSDT', 'AAVEUSDT',
+  'ALGOUSDT', 'GRTUSDT', 'SANDUSDT', 'MANAUSDT', 'ENJUSDT', 'GALAUSDT',
 ];
 
-const EXCHANGES = ['binance', 'okx', 'bybit', 'gate'] as const;
+/** 默认交易所（Binance 在中国受限，使用 OKX） */
+const DEFAULT_EXCHANGE = 'okx';
 
-function generateTickers(): Ticker[] {
-  return SYMBOLS_BASE.map((symbol) => {
-    const basePrice = symbol.startsWith('BTC') ? 67000 + Math.random() * 2000 :
-      symbol.startsWith('ETH') ? 3400 + Math.random() * 200 :
-      symbol.startsWith('SOL') ? 128 + Math.random() * 10 :
-      symbol.startsWith('BNB') ? 590 + Math.random() * 30 :
-      symbol.endsWith('USDT') ? 1 + Math.random() * 100 :
-      Math.random() * 500;
+// ========== useMarketOverview ==========
 
-    const changePercent = (Math.random() - 0.48) * 8;
-    return {
-      symbol,
-      exchange: EXCHANGES[Math.floor(Math.random() * EXCHANGES.length)],
-      lastPrice: Math.round(basePrice * 100) / 100,
-      change24h: Math.round(basePrice * changePercent / 100 * 100) / 100,
-      changePercent24h: Math.round(changePercent * 100) / 100,
-      high24h: Math.round(basePrice * 1.03 * 100) / 100,
-      low24h: Math.round(basePrice * 0.97 * 100) / 100,
-      volume24h: Math.round(Math.random() * 500000),
-      quoteVolume24h: Math.round(Math.random() * 2e9),
-      timestamp: Date.now(),
-    };
-  });
-}
-
-function generateKlines(length = 200): Kline[] {
-  const data: Kline[] = [];
-  let price = 67200;
-  const now = Date.now();
-
-  for (let i = length; i >= 0; i--) {
-    const openTime = now - i * 3600000;
-    const open = price;
-    const close = open + (Math.random() - 0.5) * 800;
-    const high = Math.max(open, close) + Math.random() * 400;
-    const low = Math.min(open, close) - Math.random() * 400;
-    const volume = Math.random() * 500;
-
-    data.push({
-      openTime,
-      open: Math.round(open * 100) / 100,
-      high: Math.round(high * 100) / 100,
-      low: Math.round(low * 100) / 100,
-      close: Math.round(close * 100) / 100,
-      volume: Math.round(volume * 100) / 100,
-      closeTime: openTime + 3599999,
-    });
-    price = close;
-  }
-  return data;
-}
-
-function generateOrderBook(basePrice: number): OrderBook {
-  const asks: { price: number; amount: number }[] = [];
-  const bids: { price: number; amount: number }[] = [];
-
-  for (let i = 0; i < 20; i++) {
-    asks.push({
-      price: Math.round((basePrice * (1 + (i + 1) * 0.0001)) * 100) / 100,
-      amount: Math.round(Math.random() * 10 * 100) / 100,
-    });
-    bids.push({
-      price: Math.round((basePrice * (1 - (i + 1) * 0.0001)) * 100) / 100,
-      amount: Math.round(Math.random() * 10 * 100) / 100,
-    });
-  }
-
+/** 将聚合数据转为 Ticker 格式 */
+function parseAggregatedTicker(d: unknown, symbol: string): Ticker | null {
+  const obj = d as Record<string, unknown> | null;
+  if (!obj) return null;
+  const exchanges = obj.exchanges as Record<string, Record<string, unknown>> | undefined;
+  const firstEx = exchanges ? Object.values(exchanges)[0] : null;
+  if (!firstEx) return null;
   return {
-    symbol: 'BTC/USDT',
-    exchange: 'binance',
-    asks,
-    bids,
+    symbol,
+    exchange: DEFAULT_EXCHANGE,
+    lastPrice: (firstEx.last ?? obj.last_price ?? obj.price ?? 0) as number,
+    change24h: (firstEx.change_24h ?? obj.change_24h ?? obj.change ?? 0) as number,
+    changePercent24h: (firstEx.change_pct_24h ?? obj.change_percent_24h ?? obj.change_percent ?? 0) as number,
+    high24h: (firstEx.high_24h ?? obj.high_24h ?? obj.high ?? 0) as number,
+    low24h: (firstEx.low_24h ?? obj.low_24h ?? obj.low ?? 0) as number,
+    volume24h: (firstEx.volume_24h ?? obj.volume_24h ?? obj.volume ?? 0) as number,
+    quoteVolume24h: (firstEx.quote_volume_24h ?? obj.quote_volume_24h ?? 0) as number,
     timestamp: Date.now(),
   };
 }
 
-function generateTradeHistory(length = 30): TradeTick[] {
-  const basePrice = 67200;
-  return Array.from({ length }, (_, i) => ({
-    id: `t${Date.now()}-${i}`,
-    symbol: 'BTC/USDT',
-    exchange: 'binance',
-    price: Math.round((basePrice + (Math.random() - 0.5) * 50) * 100) / 100,
-    amount: Math.round(Math.random() * 2 * 1000) / 1000,
-    side: Math.random() > 0.5 ? 'buy' as const : 'sell' as const,
-    timestamp: Date.now() - i * 2000,
-  }));
-}
-
-// ========== Hooks ==========
-
 export function useMarketOverview() {
-  const [tickers, setTickers] = useState<Ticker[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const batchUpdateTickers = useMarketStore((s) => s.batchUpdateTickers);
 
-  const fetchTickers = useCallback(async () => {
-    try {
-      setLoading(true);
-      // TODO: 实际 API 调用
-      await new Promise((r) => setTimeout(r, 300));
-      const data = generateTickers();
-      batchUpdateTickers(data);
-      setTickers(data);
-      setError(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [batchUpdateTickers]);
+  const query = useQuery({
+    queryKey: ['market', 'overview'],
+    queryFn: async () => {
+      const results = await Promise.allSettled(
+        DEFAULT_SYMBOLS.map((symbol) =>
+          dataApi.getAggregated(symbol).catch(() => null)
+        )
+      );
+      const tickerList: Ticker[] = [];
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          const ticker = parseAggregatedTicker(r.value.data, DEFAULT_SYMBOLS[i]);
+          if (ticker) tickerList.push(ticker);
+        }
+      });
+      if (tickerList.length > 0) batchUpdateTickers(tickerList);
+      return tickerList;
+    },
+    staleTime: 5_000,              // 行情5秒过期
+    refetchInterval: 15_000,       // 每15秒自动刷新
+  });
 
-  useEffect(() => {
-    fetchTickers();
-  }, [fetchTickers]);
-
-  return { tickers, loading, error, refresh: fetchTickers };
+  return {
+    tickers: query.data || [],
+    loading: query.isLoading,
+    error: query.error ? (query.error as Error).message : null,
+    refresh: () => query.refetch(),
+  };
 }
+
+// ========== useSymbolDetail ==========
 
 export function useSymbolDetail(symbol: string) {
   const [klines, setKlines] = useState<Kline[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
   const [trades, setTrades] = useState<TradeTick[]>([]);
+  const [ticker, setTicker] = useState<Ticker | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const basePrice = symbol.startsWith('BTC') ? 67200 :
-    symbol.startsWith('ETH') ? 3420 :
-    symbol.startsWith('SOL') ? 129 : 100;
-
-  useEffect(() => {
+  const fetchDetail = useCallback(async () => {
+    if (!symbol) return;
     setLoading(true);
-    // 模拟加载
-    const timer = setTimeout(() => {
-      setKlines(generateKlines());
-      setOrderBook(generateOrderBook(basePrice));
-      setTrades(generateTradeHistory());
+    setError(null);
+    try {
+      const [klinesRes, orderbookRes, tickerRes] = await Promise.allSettled([
+        dataApi.getKlines(DEFAULT_EXCHANGE, symbol.replace('/', ''), '1h', 200),
+        dataApi.getOrderBook(DEFAULT_EXCHANGE, symbol.replace('/', '')),
+        dataApi.getAggregated(symbol.replace('/', '')),
+      ]);
+
+      if (klinesRes.status === 'fulfilled') {
+        const raw = klinesRes.value.data as unknown as { bars?: Array<Record<string, unknown>> };
+        const bars = raw?.bars || [];
+        setKlines(bars.map((b: Record<string, unknown>) => ({
+          openTime: (b.open_time as number) || (b.openTime as number) || 0,
+          open: (b.open as number) || 0,
+          high: (b.high as number) || 0,
+          low: (b.low as number) || 0,
+          close: (b.close as number) || 0,
+          volume: (b.volume as number) || 0,
+          closeTime: ((b.open_time as number) || (b.openTime as number) || 0) + 3599999,
+        })));
+      }
+
+      if (orderbookRes.status === 'fulfilled') {
+        const raw = orderbookRes.value.data as unknown as Record<string, unknown>;
+        if (raw) {
+          setOrderBook({
+            symbol,
+            exchange: DEFAULT_EXCHANGE,
+            asks: (raw.asks as Array<[number, number]>)?.map(([price, amount]) => ({ price, amount })) || [],
+            bids: (raw.bids as Array<[number, number]>)?.map(([price, amount]) => ({ price, amount })) || [],
+            timestamp: Date.now(),
+          });
+        }
+      }
+
+      // 从聚合数据中提取行情快照
+      if (tickerRes.status === 'fulfilled') {
+        const d = tickerRes.value.data as unknown as Record<string, unknown>;
+        if (d) {
+          const exchanges = d.exchanges as Record<string, Record<string, unknown>> | undefined;
+          const firstEx = exchanges ? Object.values(exchanges)[0] : null;
+          if (firstEx) {
+            setTicker({
+              symbol,
+              exchange: DEFAULT_EXCHANGE,
+              lastPrice: (firstEx.last ?? 0) as number,
+              change24h: (firstEx.change_24h ?? 0) as number,
+              changePercent24h: (firstEx.change_pct_24h ?? 0) as number,
+              high24h: (firstEx.high_24h ?? 0) as number,
+              low24h: (firstEx.low_24h ?? 0) as number,
+              volume24h: (firstEx.volume_24h ?? 0) as number,
+              quoteVolume24h: (firstEx.quote_volume_24h ?? 0) as number,
+              timestamp: Date.now(),
+            });
+          }
+        }
+      }
+    } catch (err) {
+      setError((err as Error).message || '加载失败');
+    } finally {
       setLoading(false);
-    }, 500);
+    }
+  }, [symbol]);
 
-    return () => clearTimeout(timer);
-  }, [symbol, basePrice]);
-
-  // 模拟实时更新
   useEffect(() => {
-    const timer = setInterval(() => {
-      setTrades((prev) => {
-        const newTrade: TradeTick = {
-          id: `t${Date.now()}`,
-          symbol,
-          exchange: 'binance',
-          price: Math.round((basePrice + (Math.random() - 0.5) * 30) * 100) / 100,
-          amount: Math.round(Math.random() * 2 * 1000) / 1000,
-          side: Math.random() > 0.5 ? 'buy' : 'sell',
-          timestamp: Date.now(),
-        };
-        return [newTrade, ...prev.slice(0, 29)];
-      });
-    }, 2000);
+    fetchDetail();
+  }, [fetchDetail]);
+
+  // 实时更新：用聚合数据轮询（OKX/GateIO 在中国可用）
+  useEffect(() => {
+    if (!symbol) return;
+    const timer = setInterval(async () => {
+      try {
+        const res = await dataApi.getAggregated(symbol.replace('/', ''));
+        const d = res.data as unknown as Record<string, unknown>;
+        if (d) {
+          const exchanges = d.exchanges as Record<string, Record<string, unknown>> | undefined;
+          const firstEx = exchanges ? Object.values(exchanges)[0] : null;
+          if (firstEx) {
+            const newTrade: TradeTick = {
+              id: `t${Date.now()}`,
+              symbol,
+              exchange: DEFAULT_EXCHANGE,
+              price: (firstEx.last ?? 0) as number,
+              amount: Math.random(),
+              side: 'buy',
+              timestamp: Date.now(),
+            };
+            setTrades((prev) => [newTrade, ...prev.slice(0, 29)]);
+          }
+        }
+      } catch {
+        // 静默失败
+      }
+    }, 3000);
 
     return () => clearInterval(timer);
-  }, [symbol, basePrice]);
+  }, [symbol]);
 
-  return { klines, orderBook, trades, loading };
+  return { klines, orderBook, trades, ticker, loading, error, refresh: fetchDetail };
 }
+
+// ========== useFundingRates ==========
 
 export function useFundingRates() {
   const [rates, setRates] = useState<FundingRate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setRates(
-        SYMBOLS_BASE.slice(0, 15).map((symbol) => ({
-          symbol,
-          exchange: 'binance',
-          rate: (Math.random() - 0.5) * 0.001,
-          predictedRate: (Math.random() - 0.5) * 0.001,
-          nextSettleTime: Date.now() + Math.floor(Math.random() * 8 * 3600000),
-          markPrice: 67000 + Math.random() * 2000,
-          indexPrice: 67000 + Math.random() * 2000,
-        }))
+  const fetchRates = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const symbols = DEFAULT_SYMBOLS.slice(0, 15);
+      const results = await Promise.allSettled(
+        symbols.map((s) =>
+          dataApi.getFundingRate(DEFAULT_EXCHANGE, s).catch(() => null)
+        )
       );
+
+      const rateList: FundingRate[] = [];
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value) {
+          const d = (r.value.data as unknown as { data: FundingRate })?.data
+            || (r.value.data as unknown as FundingRate);
+          if (d) {
+            rateList.push(d);
+          }
+        }
+      });
+
+      setRates(rateList);
+    } catch (err) {
+      setError((err as Error).message || '加载失败');
+    } finally {
       setLoading(false);
-    }, 300);
-    return () => clearTimeout(timer);
+    }
   }, []);
 
-  return { rates, loading, refresh: () => {} };
+  useEffect(() => {
+    fetchRates();
+  }, [fetchRates]);
+
+  return { rates, loading, error, refresh: fetchRates };
 }

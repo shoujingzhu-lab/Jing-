@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Space, Tag, Select, Tabs, Switch, Modal, message, Row, Col } from 'antd';
 import { CheckOutlined, DeleteOutlined, ReloadOutlined, SettingOutlined, BellOutlined } from '@ant-design/icons';
-import { mockNotifications, mockNotificationPreferences, mockDelay } from '@/lib/mock';
+import { notificationApi } from '@/lib/api';
 import EmptyState from '@/components/ui/EmptyState';
 import type { Notification, NotificationPreference } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,13 +14,41 @@ export default function NotificationPage() {
   const [activeTab, setActiveTab] = useState('all');
 
   useEffect(() => {
-    Promise.all([mockDelay(mockNotifications(), 300), mockDelay(mockNotificationPreferences(), 200)])
-      .then(([n, p]) => { setNotifications(n); setPrefs(p); setLoading(false); });
+    const load = async () => {
+      try {
+        const [msgsRes, prefsRes] = await Promise.allSettled([
+          notificationApi.getMessages({ page_size: 50 }),
+          notificationApi.getPreferences(),
+        ]);
+
+        if (msgsRes.status === 'fulfilled') {
+          const msgs = (msgsRes.value.data as unknown as { items?: Notification[] })?.items
+            || (msgsRes.value.data as unknown as Notification[]) || [];
+          setNotifications(Array.isArray(msgs) ? msgs : []);
+        }
+
+        if (prefsRes.status === 'fulfilled') {
+          const p = (prefsRes.value.data as unknown as { data: NotificationPreference[] })?.data
+            || (prefsRes.value.data as unknown as NotificationPreference[]) || [];
+          setPrefs(Array.isArray(p) ? p : []);
+        }
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    message.success('已标记全部已读');
+  const markAllRead = async () => {
+    try {
+      await notificationApi.markAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      message.success('已标记全部已读');
+    } catch {
+      message.error('操作失败');
+    }
   };
 
   const deleteNotification = (id: string) => {
@@ -86,26 +114,30 @@ export default function NotificationPage() {
         ) : (
           <div style={{ padding: '16px 0' }}>
             <Typography.Title level={5} style={{ color: 'var(--text-primary)', marginBottom: 16 }}>通知偏好设置</Typography.Title>
-            {prefs.map((pref) => (
-              <Row key={pref.type} style={{ padding: '12px 0', borderBottom: '1px solid var(--border-color)' }} align="middle">
-                <Col xs={6} md={4}>
-                  <Tag color={pref.type === 'alert' ? 'red' : pref.type === 'trade' ? 'green' : pref.type === 'system' ? 'blue' : 'default'} style={{ fontSize: 13 }}>
-                    {pref.type === 'alert' ? '告警' : pref.type === 'trade' ? '交易' : pref.type === 'system' ? '系统' : '数据'}
-                  </Tag>
-                </Col>
-                <Col xs={8} md={6}><Switch checked={pref.enabled} onChange={() => message.info('偏好将在后续实现')} checkedChildren="启用" unCheckedChildren="关闭" /></Col>
-                <Col xs={10} md={14}>
-                  <Space wrap>
-                    {(['site', 'email', 'telegram', 'discord', 'dingtalk'] as const).map((ch) => (
-                      <Tag.CheckableTag key={ch} checked={pref.channels.includes(ch)} onChange={() => message.info('频道配置将在后续实现')}
-                        style={{ padding: '2px 10px', border: '1px solid var(--border-color)' }}>
-                        {ch === 'site' ? '站内' : ch === 'email' ? '邮件' : ch === 'telegram' ? 'Telegram' : ch === 'discord' ? 'Discord' : '钉钉'}
-                      </Tag.CheckableTag>
-                    ))}
-                  </Space>
-                </Col>
-              </Row>
-            ))}
+            {prefs.length === 0 ? (
+              <EmptyState title="暂无偏好设置" description="通知偏好将从后端同步" />
+            ) : (
+              prefs.map((pref) => (
+                <Row key={pref.type} style={{ padding: '12px 0', borderBottom: '1px solid var(--border-color)' }} align="middle">
+                  <Col xs={6} md={4}>
+                    <Tag color={pref.type === 'alert' ? 'red' : pref.type === 'trade' ? 'green' : pref.type === 'system' ? 'blue' : 'default'} style={{ fontSize: 13 }}>
+                      {pref.type === 'alert' ? '告警' : pref.type === 'trade' ? '交易' : pref.type === 'system' ? '系统' : '数据'}
+                    </Tag>
+                  </Col>
+                  <Col xs={8} md={6}><Switch checked={pref.enabled} onChange={() => message.info('偏好将在后续实现')} checkedChildren="启用" unCheckedChildren="关闭" /></Col>
+                  <Col xs={10} md={14}>
+                    <Space wrap>
+                      {(['site', 'email', 'telegram', 'discord', 'dingtalk'] as const).map((ch) => (
+                        <Tag.CheckableTag key={ch} checked={pref.channels.includes(ch)} onChange={() => message.info('频道配置将在后续实现')}
+                          style={{ padding: '2px 10px', border: '1px solid var(--border-color)' }}>
+                          {ch === 'site' ? '站内' : ch === 'email' ? '邮件' : ch === 'telegram' ? 'Telegram' : ch === 'discord' ? 'Discord' : '钉钉'}
+                        </Tag.CheckableTag>
+                      ))}
+                    </Space>
+                  </Col>
+                </Row>
+              ))
+            )}
             <Button type="primary" style={{ marginTop: 16 }} onClick={() => message.success('偏好已保存')}>保存偏好</Button>
           </div>
         )}

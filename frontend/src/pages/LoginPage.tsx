@@ -90,8 +90,10 @@ export default function LoginPage() {
         return;
       }
 
-      const { accessToken, refreshToken, expiresIn, user } = res.data.data;
-      login(user, accessToken, refreshToken, expiresIn, values.rememberMe);
+      const { access_token: accessToken, refresh_token: refreshToken, expires_in: expiresIn, user } = res.data as unknown as {
+        access_token: string; refresh_token: string; expires_in?: number; user: { id: string; username: string; email: string; role?: string };
+      };
+      login(user, accessToken, refreshToken, expiresIn ?? 3600, values.rememberMe);
       message.success('登录成功');
       navigate('/');
     } catch (err: unknown) {
@@ -129,8 +131,10 @@ export default function LoginPage() {
         email: form.getFieldValue('email'),
         password: form.getFieldValue('password'),
       });
-      const { accessToken, refreshToken, expiresIn, user } = res.data.data;
-      login(user, accessToken, refreshToken, expiresIn, form.getFieldValue('rememberMe'));
+      const { access_token: accessToken, refresh_token: refreshToken, expires_in: expiresIn, user } = res.data as unknown as {
+        access_token: string; refresh_token: string; expires_in?: number; user: { id: string; username: string; email: string; role?: string };
+      };
+      login(user, accessToken, refreshToken, expiresIn ?? 3600, form.getFieldValue('rememberMe'));
       message.success('登录成功');
       navigate('/');
     } catch {

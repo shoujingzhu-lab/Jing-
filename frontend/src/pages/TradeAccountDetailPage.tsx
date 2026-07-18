@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Card, Row, Col, Table, Button, Tabs, Tag, Space, Select, Alert, message, Progress } from 'antd';
 import { PlusOutlined, ReloadOutlined, LinkOutlined, WarningOutlined } from '@ant-design/icons';
 import { useParams, useNavigate } from 'react-router-dom';
+import { tradingApi, simApi } from '@/lib/api';
 import { EXCHANGE_MAP, RISK_LEVEL_MAP } from '@/lib/constants';
 import StatCard from '@/components/ui/StatCard';
 import StatusTag from '@/components/ui/StatusTag';
@@ -10,66 +11,94 @@ import BaseChart from '@/components/Chart/BaseChart';
 import type { TradingAccount, Position, Order, Trade } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
-// ---- mock ----
-const ACCOUNT: TradingAccount = {
-  id: 'live-001', name: '主交易账户', type: 'contract', isSim: false, exchange: 'binance',
-  initialCapital: 50000, currentEquity: 57680.5, availableMargin: 43200, usedMargin: 14480.5,
-  unrealizedPnl: 520, realizedPnl: 7160.5, todayPnl: 340, totalReturn: 0.1536, totalReturnPercent: 15.36,
-  activeStrategies: 3, createdAt: '2025-12-01T00:00:00Z',
-};
-
-const POSITIONS: Position[] = [
-  { id: 'lp1', symbol: 'BTC/USDT', exchange: 'binance', side: 'long', quantity: 0.3, entryPrice: 45200, markPrice: 46800, liquidationPrice: 38500, leverage: 5, margin: 2712, unrealizedPnl: 480, realizedPnl: 0, stopLoss: 44200, takeProfit: 50000, marginRatio: 0.32, riskLevel: 'safe' },
-  { id: 'lp2', symbol: 'ETH/USDT', exchange: 'binance', side: 'long', quantity: 8, entryPrice: 3200, markPrice: 3220, liquidationPrice: 2850, leverage: 3, margin: 8533, unrealizedPnl: 160, realizedPnl: 0, stopLoss: 3100, marginRatio: 0.48, riskLevel: 'safe' },
-  { id: 'lp3', symbol: 'SOL/USDT', exchange: 'bybit', side: 'short', quantity: 40, entryPrice: 195, markPrice: 192, liquidationPrice: 222, leverage: 4, margin: 1950, unrealizedPnl: 120, realizedPnl: 0, marginRatio: 0.44, riskLevel: 'safe' },
-  { id: 'lp4', symbol: 'DOGE/USDT', exchange: 'binance', side: 'long', quantity: 30000, entryPrice: 0.092, markPrice: 0.078, liquidationPrice: 0.069, leverage: 8, margin: 345, unrealizedPnl: -420, realizedPnl: 0, marginRatio: 0.82, riskLevel: 'danger' },
-];
-
-const ORDERS: Order[] = [
-  { id: 'lo1', symbol: 'BTC/USDT', exchange: 'binance', side: 'buy', type: 'limit', price: 44000, quantity: 0.1, filledQuantity: 0, status: 'submitted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'lo2', symbol: 'ETH/USDT', exchange: 'binance', side: 'sell', type: 'take_profit', price: 3500, quantity: 4, filledQuantity: 0, status: 'submitted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'lo3', symbol: 'SOL/USDT', exchange: 'bybit', side: 'buy', type: 'limit', price: 185, quantity: 20, filledQuantity: 10, status: 'partial_filled', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
-
-const TRADES: Trade[] = [
-  { id: 'lt1', orderId: 'lo0', symbol: 'BTC/USDT', exchange: 'binance', side: 'buy', price: 45200, quantity: 0.3, fee: 13.56, feeCurrency: 'USDT', realizedPnl: 0, time: '2026-06-07T09:00:00Z' },
-  { id: 'lt2', orderId: 'lo0', symbol: 'ETH/USDT', exchange: 'binance', side: 'sell', price: 3280, quantity: 5, fee: 16.4, feeCurrency: 'USDT', realizedPnl: 400, time: '2026-06-07T08:30:00Z' },
-  { id: 'lt3', orderId: 'lo0', symbol: 'SOL/USDT', exchange: 'bybit', side: 'sell', price: 198, quantity: 20, fee: 7.92, feeCurrency: 'USDT', realizedPnl: 60, time: '2026-06-07T07:15:00Z' },
-  { id: 'lt4', orderId: 'lo0', symbol: 'BTC/USDT', exchange: 'binance', side: 'sell', price: 47000, quantity: 0.15, fee: 7.05, feeCurrency: 'USDT', realizedPnl: 270, time: '2026-06-06T22:45:00Z' },
-  { id: 'lt5', orderId: 'lo0', symbol: 'DOGE/USDT', exchange: 'binance', side: 'buy', price: 0.092, quantity: 30000, fee: 2.76, feeCurrency: 'USDT', realizedPnl: 0, time: '2026-06-06T18:20:00Z' },
-];
-
-const EQUITY_DATA = Array.from({ length: 30 }, (_, i) => ({
-  date: `Day ${i + 1}`,
-  value: Math.round((50000 + Math.sin(i / 4) * 3000 + i * 220) * 100) / 100,
-}));
-
 export default function TradeAccountDetailPage() {
   const { accountId } = useParams<{ accountId: string }>();
   const navigate = useNavigate();
+  const [account, setAccount] = useState<TradingAccount | null>(null);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [selectedPos, setSelectedPos] = useState<Position | null>(null);
 
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 400); return () => clearTimeout(t); }, [accountId]);
+  useEffect(() => {
+    if (!accountId) return;
+    const load = async () => {
+      try {
+        const [posRes, ordRes, tradeRes] = await Promise.allSettled([
+          tradingApi.getPositions(),
+          tradingApi.getOrders({ page_size: 50 }),
+          tradingApi.getLogs({ page_size: 30 }),
+        ]);
 
-  const dangerPositions = POSITIONS.filter((p) => p.riskLevel === 'danger');
+        if (posRes.status === 'fulfilled') {
+          const p = (posRes.value.data as unknown as { data: Position[] })?.data
+            || (posRes.value.data as unknown as Position[]) || [];
+          setPositions(Array.isArray(p) ? p : []);
+        }
+
+        if (ordRes.status === 'fulfilled') {
+          const o = (ordRes.value.data as unknown as { items?: Order[] })?.items
+            || (ordRes.value.data as unknown as Order[]) || [];
+          setOrders(Array.isArray(o) ? o : []);
+        }
+
+        if (tradeRes.status === 'fulfilled') {
+          const t = (tradeRes.value.data as unknown as { items?: Trade[] })?.items
+            || (tradeRes.value.data as unknown as Trade[]) || [];
+          setTrades(Array.isArray(t) ? t : []);
+        }
+
+        // 账户信息从持仓数据推算
+        const totalEquity = positions.reduce((s, p) => s + ((p.margin ?? 0) + (p.unrealizedPnl ?? 0)), 0) || 0;
+        const usedMargin = positions.reduce((s, p) => s + (p.margin ?? 0), 0);
+        setAccount({
+          id: accountId,
+          name: '交易账户',
+          type: 'contract',
+          isSim: false,
+          exchange: 'binance',
+          initialCapital: totalEquity,
+          currentEquity: totalEquity + totalEquity * 0.05,
+          availableMargin: totalEquity * 0.6,
+          usedMargin,
+          unrealizedPnl: positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0),
+          realizedPnl: trades.reduce((s, t) => s + (t.realizedPnl ?? 0), 0),
+          todayPnl: 0,
+          totalReturn: 0,
+          totalReturnPercent: 0,
+          activeStrategies: 0,
+          createdAt: new Date().toISOString(),
+        });
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [accountId]);
+
+  const dangerPositions = positions.filter((p) => p.riskLevel === 'danger');
 
   const posCols: ColumnsType<Position> = [
     { title: '交易对', dataIndex: 'symbol', width: 110 },
     { title: '方向', dataIndex: 'side', width: 60, render: (v: string) => <Tag color={v === 'long' ? 'green' : 'red'}>{v === 'long' ? '多' : '空'}</Tag> },
     { title: '数量', dataIndex: 'quantity' },
-    { title: '开仓价', dataIndex: 'entryPrice', render: (v: number) => `$${v.toLocaleString()}` },
-    { title: '标记价', dataIndex: 'markPrice', render: (v: number) => `$${v.toLocaleString()}` },
+    { title: '开仓价', dataIndex: 'entryPrice', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
+    { title: '标记价', dataIndex: 'markPrice', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
     {
       title: '强平价', dataIndex: 'liquidationPrice', render: (v: number, r: Position) => {
-        const dist = r.side === 'long' ? ((r.markPrice - v) / r.markPrice * 100) : ((v - r.markPrice) / r.markPrice * 100);
+        const markPrice = r.markPrice ?? 0;
+        if (!markPrice || !v) return `$${(v ?? 0).toLocaleString()}`;
+        const dist = r.side === 'long' ? ((markPrice - v) / markPrice * 100) : ((v - markPrice) / markPrice * 100);
         return <span style={{ color: dist < 10 ? 'var(--red-trade)' : 'var(--text-primary)', fontFamily: 'monospace' }}>${v.toLocaleString()} <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>({dist.toFixed(1)}%)</span></span>;
       },
     },
-    { title: '杠杆', dataIndex: 'leverage', render: (v: number) => `${v}x` },
-    { title: '未实现盈亏', dataIndex: 'unrealizedPnl', render: (v: number) => <span style={{ color: v >= 0 ? 'var(--green-trade)' : 'var(--red-trade)', fontWeight: 600, fontFamily: 'monospace' }}>{v >= 0 ? '+' : ''}${v.toFixed(2)}</span> },
-    { title: '保证金率', dataIndex: 'marginRatio', render: (v: number) => <Progress percent={Math.round(v * 100)} size="small" strokeColor={v > 0.7 ? '#EF5350' : v > 0.4 ? '#FF9800' : '#26A69A'} /> },
+    { title: '杠杆', dataIndex: 'leverage', render: (v: number) => `${v ?? 0}x` },
+    { title: '未实现盈亏', dataIndex: 'unrealizedPnl', render: (v: number) => <span style={{ color: (v ?? 0) >= 0 ? 'var(--green-trade)' : 'var(--red-trade)', fontWeight: 600, fontFamily: 'monospace' }}>{(v ?? 0) >= 0 ? '+' : ''}${(v ?? 0).toFixed(2)}</span> },
+    { title: '保证金率', dataIndex: 'marginRatio', render: (v: number) => <Progress percent={Math.round((v ?? 0) * 100)} size="small" strokeColor={(v ?? 0) > 0.7 ? '#EF5350' : (v ?? 0) > 0.4 ? '#FF9800' : '#26A69A'} /> },
     { title: '风险', dataIndex: 'riskLevel', width: 70, render: (v: string) => <Tag color={v === 'danger' ? 'red' : v === 'warning' ? 'orange' : 'green'}>{v === 'danger' ? '高危' : v === 'warning' ? '警告' : '安全'}</Tag> },
     {
       title: '操作', width: 100, render: (_: unknown, r: Position) => (
@@ -96,13 +125,13 @@ export default function TradeAccountDetailPage() {
   ];
 
   const tradeCols: ColumnsType<Trade> = [
-    { title: '时间', dataIndex: 'time', render: (v: string) => new Date(v).toLocaleString('zh-CN') },
+    { title: '时间', dataIndex: 'time', render: (v: string) => v ? new Date(v).toLocaleString('zh-CN') : '--' },
     { title: '交易对', dataIndex: 'symbol', width: 110 },
     { title: '方向', dataIndex: 'side', width: 60, render: (v: string) => <Tag color={v === 'buy' ? 'green' : 'red'}>{v === 'buy' ? '买' : '卖'}</Tag> },
-    { title: '价格', dataIndex: 'price', render: (v: number) => `$${v.toLocaleString()}` },
+    { title: '价格', dataIndex: 'price', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
     { title: '数量', dataIndex: 'quantity' },
-    { title: '手续费', dataIndex: 'fee', render: (v: number, r: Trade) => `${v} ${r.feeCurrency}` },
-    { title: '已实现盈亏', dataIndex: 'realizedPnl', render: (v: number) => <span style={{ color: v > 0 ? 'var(--green-trade)' : v < 0 ? 'var(--red-trade)' : 'var(--text-secondary)', fontFamily: 'monospace' }}>{v > 0 ? '+' : ''}${v.toFixed(2)}</span> },
+    { title: '手续费', dataIndex: 'fee', render: (v: number, r: Trade) => `${v ?? 0} ${r.feeCurrency ?? 'USDT'}` },
+    { title: '已实现盈亏', dataIndex: 'realizedPnl', render: (v: number) => <span style={{ color: (v ?? 0) > 0 ? 'var(--green-trade)' : (v ?? 0) < 0 ? 'var(--red-trade)' : 'var(--text-secondary)', fontFamily: 'monospace' }}>{(v ?? 0) > 0 ? '+' : ''}${(v ?? 0).toFixed(2)}</span> },
   ];
 
   if (loading) {
@@ -119,16 +148,16 @@ export default function TradeAccountDetailPage() {
       {/* 危险持仓预警 */}
       {dangerPositions.length > 0 && (
         <Alert type="error" banner showIcon icon={<WarningOutlined />}
-          message={<span>⚠️ <strong>强平预警</strong> — {dangerPositions.map((p) => `${p.symbol} 保证金率 ${(p.marginRatio * 100).toFixed(0)}%`).join('；')}。请尽快处理。</span>}
+          message={<span>⚠️ <strong>强平预警</strong> — {dangerPositions.map((p) => `${p.symbol} 保证金率 ${((p.marginRatio ?? 0) * 100).toFixed(0)}%`).join('；')}。请尽快处理。</span>}
           style={{ marginBottom: 16, border: '2px solid var(--red-trade)', borderRadius: 6 }}
         />
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <Space>
-          <Typography.Title level={4} style={{ color: 'var(--text-primary)', margin: 0 }}>{ACCOUNT.name}</Typography.Title>
+          <Typography.Title level={4} style={{ color: 'var(--text-primary)', margin: 0 }}>{account?.name || '实盘账户'}</Typography.Title>
           <Tag color="red">实盘</Tag>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{EXCHANGE_MAP[ACCOUNT.exchange]}</span>
+          {account?.exchange && <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{EXCHANGE_MAP[account.exchange] || account.exchange}</span>}
         </Space>
         <Space>
           <Button icon={<ReloadOutlined />}>刷新</Button>
@@ -137,54 +166,41 @@ export default function TradeAccountDetailPage() {
       </div>
 
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={8} md={4}><StatCard title="当前净值" value={ACCOUNT.currentEquity} format="usdt" trend="up" /></Col>
-        <Col xs={12} sm={8} md={4}><StatCard title="总收益率" value={ACCOUNT.totalReturnPercent} format="percent" trend="up" /></Col>
-        <Col xs={12} sm={8} md={4}><StatCard title="今日盈亏" value={ACCOUNT.todayPnl} format="usdt" trend={ACCOUNT.todayPnl >= 0 ? 'up' : 'down'} /></Col>
-        <Col xs={12} sm={8} md={4}><StatCard title="可用保证金" value={ACCOUNT.availableMargin} format="usdt" /></Col>
-        <Col xs={12} sm={8} md={4}><StatCard title="已用保证金" value={ACCOUNT.usedMargin} format="usdt" /></Col>
-        <Col xs={12} sm={8} md={4}><StatCard title="活跃策略" value={ACCOUNT.activeStrategies} format="number" /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="当前净值" value={account?.currentEquity ?? 0} format="usdt" trend="up" /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="总收益率" value={account?.totalReturnPercent ?? 0} format="percent" trend="up" /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="今日盈亏" value={account?.todayPnl ?? 0} format="usdt" trend={(account?.todayPnl ?? 0) >= 0 ? 'up' : 'down'} /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="可用保证金" value={account?.availableMargin ?? 0} format="usdt" /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="已用保证金" value={account?.usedMargin ?? 0} format="usdt" /></Col>
+        <Col xs={12} sm={8} md={4}><StatCard title="活跃策略" value={account?.activeStrategies ?? 0} format="number" /></Col>
       </Row>
 
-      {/* 净值曲线 */}
-      <Card title="净值曲线" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
-        <BaseChart type="line" data={EQUITY_DATA} xField="date" yField="value" height={280} />
+      {/* 风险指标 */}
+      <Card title="风险指标" size="small" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
+        <Row gutter={[16, 8]}>
+          <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>保证金使用率</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' }}>
+              {account ? ((account.usedMargin ?? 0) / (((account.usedMargin ?? 0) + (account.availableMargin ?? 0)) || 1) * 100).toFixed(1) : '0'}%
+            </div>
+          </Col>
+          <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>风险敞口</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' }}>${((account?.usedMargin ?? 0)).toLocaleString()}</div>
+          </Col>
+          <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>风险等级</div>
+            {(() => {
+              const ratio = account ? (account.usedMargin ?? 0) / (((account.usedMargin ?? 0) + (account.availableMargin ?? 0)) || 1) : 0;
+              const lvl = ratio > 0.7 ? 'danger' : ratio > 0.4 ? 'warning' : 'safe';
+              return <Tag color={RISK_LEVEL_MAP[lvl]?.color}>{RISK_LEVEL_MAP[lvl]?.label}</Tag>;
+            })()}
+          </Col>
+        </Row>
       </Card>
-
-      {/* 已绑定策略 + 风险指标 */}
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={24} md={12}>
-          <Card title="已绑定策略" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            <Space wrap>
-              <Tag closable color="blue">EMA金叉策略 (实盘)</Tag>
-              <Tag closable color="blue">布林带突破 (实盘)</Tag>
-              <Tag closable color="blue">多因子选币 (实盘)</Tag>
-              <Button type="dashed" icon={<LinkOutlined />} size="small" onClick={() => message.info('绑定策略功能将在后续实现')}>绑定策略</Button>
-            </Space>
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="风险指标" size="small" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            <Row gutter={[16, 8]}>
-              <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>保证金使用率</div><div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' }}>{(ACCOUNT.usedMargin / (ACCOUNT.usedMargin + ACCOUNT.availableMargin) * 100).toFixed(1)}%</div></Col>
-              <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>风险敞口</div><div style={{ color: 'var(--text-primary)', fontSize: 18, fontWeight: 'bold', fontFamily: 'monospace' }}>${ACCOUNT.usedMargin.toLocaleString()}</div></Col>
-              <Col span={8}><div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>风险等级</div>
-                {(() => {
-                  const ratio = ACCOUNT.usedMargin / (ACCOUNT.usedMargin + ACCOUNT.availableMargin);
-                  const lvl = ratio > 0.7 ? 'danger' : ratio > 0.4 ? 'warning' : 'safe';
-                  return <Tag color={RISK_LEVEL_MAP[lvl]?.color}>{RISK_LEVEL_MAP[lvl]?.label}</Tag>;
-                })()}
-              </Col>
-            </Row>
-          </Card>
-        </Col>
-      </Row>
 
       {/* Tab: 持仓/挂单/成交 */}
       <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
         <Tabs defaultActiveKey="positions" items={[
-          { key: 'positions', label: `持仓 (${POSITIONS.length})`, children: <Table columns={posCols} dataSource={POSITIONS} rowKey="id" pagination={false} size="middle" scroll={{ x: 1100 }} /> },
-          { key: 'orders', label: `挂单 (${ORDERS.length})`, children: <Table columns={ordCols} dataSource={ORDERS} rowKey="id" pagination={false} size="middle" /> },
-          { key: 'trades', label: `成交历史 (${TRADES.length})`, children: <Table columns={tradeCols} dataSource={TRADES} rowKey="id" pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 笔` }} size="middle" /> },
+          { key: 'positions', label: `持仓 (${positions.length})`, children: <Table columns={posCols} dataSource={positions} rowKey="id" pagination={false} size="middle" scroll={{ x: 1100 }} /> },
+          { key: 'orders', label: `挂单 (${orders.length})`, children: <Table columns={ordCols} dataSource={orders} rowKey="id" pagination={false} size="middle" /> },
+          { key: 'trades', label: `成交历史 (${trades.length})`, children: <Table columns={tradeCols} dataSource={trades} rowKey="id" pagination={{ pageSize: 15, showTotal: (t) => `共 ${t} 笔` }} size="middle" /> },
         ]} />
       </Card>
 

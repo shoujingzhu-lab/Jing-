@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Space, Tag, Modal, Form, InputNumber, Select, Switch, message } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, ReloadOutlined, BellOutlined } from '@ant-design/icons';
-import { mockPriceAlerts, mockDelay } from '@/lib/mock';
+import { notificationApi } from '@/lib/api';
 import EmptyState from '@/components/ui/EmptyState';
 import type { PriceAlert } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,7 +14,19 @@ export default function PriceAlertPage() {
   const [form] = Form.useForm();
 
   useEffect(() => {
-    mockDelay(mockPriceAlerts(), 300).then((d) => { setAlerts(d); setLoading(false); });
+    const load = async () => {
+      try {
+        const res = await notificationApi.getRules();
+        const data = (res.data as unknown as { data: PriceAlert[] })?.data
+          || (res.data as unknown as PriceAlert[]) || [];
+        setAlerts(Array.isArray(data) ? data : []);
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
   }, []);
 
   const handleSave = () => {
@@ -39,13 +51,13 @@ export default function PriceAlertPage() {
   const cols: ColumnsType<PriceAlert> = [
     { title: '交易对', dataIndex: 'symbol', width: 120, render: (v: string) => <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{v}</span> },
     { title: '条件', dataIndex: 'condition', width: 70, render: (v: string) => <Tag color={v === 'gte' ? 'green' : 'red'}>{v === 'gte' ? '≥' : '≤'}</Tag> },
-    { title: '目标价', dataIndex: 'targetPrice', render: (v: number) => `$${v.toLocaleString()}` },
-    { title: '当前价', dataIndex: 'currentPrice', render: (v: number) => `$${v.toLocaleString()}` },
+    { title: '目标价', dataIndex: 'targetPrice', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
+    { title: '当前价', dataIndex: 'currentPrice', render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
     { title: '距目标', render: (_: unknown, r: PriceAlert) => {
-      const diff = ((r.targetPrice - r.currentPrice) / r.currentPrice * 100);
+      const diff = r.currentPrice ? ((r.targetPrice - r.currentPrice) / r.currentPrice * 100) : 0;
       return <span style={{ color: diff > 0 ? 'var(--green-trade)' : 'var(--red-trade)' }}>{diff > 0 ? '+' : ''}{diff.toFixed(2)}%</span>;
     }},
-    { title: '通知方式', dataIndex: 'channels', width: 160, render: (v: string[]) => v.map((c: string) => <Tag key={c} color="blue">{c === 'site' ? '站内' : c === 'email' ? '邮件' : c === 'telegram' ? 'Telegram' : c}</Tag>) },
+    { title: '通知方式', dataIndex: 'channels', width: 160, render: (v: string[]) => (v || []).map((c: string) => <Tag key={c} color="blue">{c === 'site' ? '站内' : c === 'email' ? '邮件' : c === 'telegram' ? 'Telegram' : c}</Tag>) },
     { title: '启用', dataIndex: 'enabled', width: 60, render: (v: boolean, r: PriceAlert) => <Switch checked={v} size="small" onChange={(chk) => setAlerts((prev) => prev.map((a) => a.id === r.id ? { ...a, enabled: chk } : a))} /> },
     { title: '状态', width: 100, render: (_: unknown, r: PriceAlert) =>
       r.triggeredAt ? <Tag color="success" icon={<BellOutlined />}>已触发</Tag> : <Tag>监控中</Tag>

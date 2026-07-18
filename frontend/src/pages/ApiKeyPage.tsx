@@ -1,16 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, Modal, Form, Input, Select, DatePicker, Switch, message, Tooltip } from 'antd';
 import { PlusOutlined, DeleteOutlined, CopyOutlined, ReloadOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { tradingApi } from '@/lib/api';
 import EmptyState from '@/components/ui/EmptyState';
 import type { ColumnsType } from 'antd/es/table';
 
 interface ApiKey { id: string; name: string; key: string; secret: string; scope: string[]; lastUsed?: string; expiresAt?: string; enabled: boolean; createdAt: string }
-
-const MOCK_KEYS: ApiKey[] = [
-  { id: 'ak-001', name: '行情数据查询', key: 'qt_mk_****a1b2', secret: '••••••••', scope: ['market:read'], lastUsed: '2026-06-07T09:00:00Z', enabled: true, createdAt: '2026-01-15T10:00:00Z' },
-  { id: 'ak-002', name: '策略回测 API', key: 'qt_bt_****c3d4', secret: '••••••••', scope: ['strategy:read', 'strategy:write', 'backtest:read', 'backtest:write'], lastUsed: '2026-06-06T18:30:00Z', enabled: true, createdAt: '2026-03-20T14:00:00Z' },
-  { id: 'ak-003', name: '交易执行', key: 'qt_tr_****e5f6', secret: '••••••••', scope: ['trade:read', 'trade:write'], enabled: false, createdAt: '2026-05-10T08:00:00Z', expiresAt: '2026-12-31T23:59:59Z' },
-];
 
 const SCOPE_OPTIONS = [
   { value: 'market:read', label: 'market:read' }, { value: 'market:write', label: 'market:write' },
@@ -21,10 +16,40 @@ const SCOPE_OPTIONS = [
 ];
 
 export default function ApiKeyPage() {
-  const [keys, setKeys] = useState<ApiKey[]>(MOCK_KEYS);
+  const [keys, setKeys] = useState<ApiKey[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
   const [revealedSecrets, setRevealedSecrets] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await tradingApi.getApiKeys();
+        const data = (res.data as unknown as { data: unknown[] })?.data
+          || (res.data as unknown as unknown[]) || [];
+        if (Array.isArray(data)) {
+          setKeys(data.map((k: unknown) => {
+            const key = k as Record<string, unknown>;
+            return {
+              id: key.id as string || `ak-${Date.now()}`,
+              name: (key.label as string) || (key.exchange as string) || 'API Key',
+              key: (key.access_key as string)?.substring(0, 12) + '****' || '****',
+              secret: '••••••••',
+              scope: ['trade:read', 'trade:write'],
+              enabled: true,
+              createdAt: new Date().toISOString(),
+            };
+          }));
+        }
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleCreate = () => {
     form.validateFields().then((vals) => {
@@ -77,10 +102,10 @@ export default function ApiKeyPage() {
         </Space>
       </div>
       <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-        {keys.length === 0 ? (
+        {!loading && keys.length === 0 ? (
           <EmptyState title="暂无 API Key" description="创建 API Key 以通过接口访问系统功能" action={<Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>创建 API Key</Button>} />
         ) : (
-          <Table columns={cols} dataSource={keys} rowKey="id" pagination={false} size="middle" scroll={{ x: 1200 }} />
+          <Table columns={cols} dataSource={keys} rowKey="id" loading={loading} pagination={false} size="middle" scroll={{ x: 1200 }} />
         )}
       </Card>
       <Modal title="创建 API Key" open={modalOpen} onCancel={() => { setModalOpen(false); form.resetFields(); }} onOk={handleCreate} okText="创建" width={560} destroyOnClose>

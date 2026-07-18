@@ -3,7 +3,7 @@ import { Typography, Card, Input, Select, Button, Space, Table, Dropdown, Progre
 import { SearchOutlined, PlusOutlined, MoreOutlined, PlayCircleOutlined, StopOutlined, DeleteOutlined, BarChartOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
-import { mockBacktestTasks, mockDelay } from '@/lib/mock';
+import { backtestApi } from '@/lib/api';
 import { BACKTEST_STATUS_MAP } from '@/lib/constants';
 import StatusTag from '@/components/ui/StatusTag';
 import EmptyState from '@/components/ui/EmptyState';
@@ -19,10 +19,12 @@ export default function BacktestListPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await mockDelay(mockBacktestTasks(), 600);
-      setTasks(data);
+      const res = await backtestApi.getList();
+      const data = (res.data as unknown as { items?: BacktestTask[] })?.items
+        || (res.data as unknown as BacktestTask[]) || [];
+      setTasks(Array.isArray(data) ? data : []);
     } catch {
-      message.error('加载回测任务失败');
+      message.error('加载回测任务失败，请确认后端服务已启动');
     } finally {
       setLoading(false);
     }
@@ -42,9 +44,9 @@ export default function BacktestListPage() {
     <Dropdown menu={{ items: [
       { key: 'report', icon: <BarChartOutlined />, label: '查看报告', disabled: r.status !== 'completed', onClick: () => navigate(`/backtest/${r.id}`) },
       { key: 'rerun', icon: <PlayCircleOutlined />, label: '重新运行', onClick: () => message.info('已加入回测队列') },
-      { key: 'cancel', icon: <StopOutlined />, label: '取消', disabled: r.status !== 'running' && r.status !== 'queued', onClick: () => message.success('任务已取消') },
+      { key: 'cancel', icon: <StopOutlined />, label: '取消', disabled: r.status !== 'running' && r.status !== 'queued', onClick: async () => { try { await backtestApi.cancel(r.id); message.success('任务已取消'); loadData(); } catch { message.error('取消失败'); } } },
       { type: 'divider' },
-      { key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true, onClick: () => { setTasks((p) => p.filter((x) => x.id !== r.id)); message.success('已删除'); } },
+      { key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true, onClick: async () => { try { await backtestApi.cancel(r.id); setTasks((p) => p.filter((x) => x.id !== r.id)); message.success('已删除'); } catch { message.error('删除失败'); } } },
     ]}}>
       <Button type="text" size="small" icon={<MoreOutlined />} />
     </Dropdown>

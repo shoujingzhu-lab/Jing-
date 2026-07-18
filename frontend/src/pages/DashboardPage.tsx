@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
-import { Alert, Row, Col } from 'antd';
-import { WarningOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { Typography } from 'antd';
+import { Alert, Row, Col, Typography } from 'antd';
+import { WarningOutlined } from '@ant-design/icons';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import GlassCard from '@/components/ui/GlassCard';
 import GlassButton from '@/components/ui/GlassButton';
@@ -17,43 +15,49 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { data, loading, error, refresh } = useDashboard();
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      refresh(true);
-    }, 10000);
-    return () => clearInterval(timer);
-  }, [refresh]);
-
-  // 新用户引导 — 玻璃风格
-  if (!loading && data && !data.hasStrategies) {
-    return (
-      <div style={{ textAlign: 'center', paddingTop: 80 }}>
-        <span style={{ fontSize: 72, filter: 'drop-shadow(0 0 20px rgba(0, 212, 255, 0.3))' }}>🚀</span>
-        <Typography.Title level={3} style={{ color: 'var(--text-primary)', marginTop: 20 }}>
-          欢迎使用量化交易系统
-        </Typography.Title>
-        <Typography.Paragraph style={{ color: 'var(--text-secondary)', fontSize: 16, marginBottom: 32 }}>
-          你还没有策略，创建第一个策略开始你的量化交易之旅
-        </Typography.Paragraph>
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          <GlassButton variant="primary" onClick={() => navigate('/strategy/visual/new')}>
-            可视化策略编辑器
-          </GlassButton>
-          <GlassButton variant="secondary" onClick={() => navigate('/strategy/code/new')}>
-            代码策略编辑器
-          </GlassButton>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <Typography.Title level={4} style={{ color: 'var(--text-primary)', marginBottom: 20 }}>
         仪表盘
       </Typography.Title>
 
-      {/* 风控告警横幅 — 玻璃风格 */}
+      {/* 新用户引导横幅（内联，不挡数据） */}
+      {!loading && data && !data.hasStrategies && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(240,185,11,0.1), rgba(240,185,11,0.02))',
+            border: '1px solid rgba(240,185,11,0.3)',
+            borderRadius: 14,
+            padding: '20px 24px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <span style={{ fontSize: 28, marginRight: 12 }}>🚀</span>
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: 15 }}>
+              欢迎使用量化交易系统
+            </span>
+            <span style={{ color: 'var(--text-secondary)', marginLeft: 12, fontSize: 13 }}>
+              你还没有策略，创建第一个策略开始量化交易之旅
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <GlassButton variant="primary" onClick={() => navigate('/strategy/visual/new')}>
+              可视化策略编辑器
+            </GlassButton>
+            <GlassButton variant="secondary" onClick={() => navigate('/strategy/code/new')}>
+              代码策略编辑器
+            </GlassButton>
+          </div>
+        </div>
+      )}
+
+      {/* 风控告警横幅 */}
       <div style={{ marginBottom: 16 }}>
         <Alert
           message="⚠ 风控提示：今日累计亏损已达日内限额的 60%，请注意风险"
@@ -90,7 +94,7 @@ export default function DashboardPage() {
         </GlassCard>
       </ErrorBoundary>
 
-      {/* 资产曲线 — 玻璃面板 */}
+      {/* 资产曲线 */}
       <div style={{ marginTop: 16 }}>
         <ErrorBoundary>
           <GlassCard variant="panel" staggerIndex={1}>

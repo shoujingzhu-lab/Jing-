@@ -1,24 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Row, Col, Card, Typography, Table, Tag, Button, Space, Alert, Tabs, Modal, Form, InputNumber, Select, Switch, message, Tooltip } from 'antd';
 import { WarningOutlined, CloseOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons';
 import StatCard from '@/components/ui/StatCard';
 import StatusTag from '@/components/ui/StatusTag';
 import ConfirmModal from '@/components/ConfirmModal';
+import { tradingApi } from '@/lib/api';
 import { formatUSDT, formatCryptoAmount } from '@/lib/utils/format';
 import type { Position, Order, OrderSide, OrderType, Exchange } from '@/lib/types';
-
-// --- mock ---
-const POSITIONS: Position[] = [
-  { id: 'p1', symbol: 'BTC/USDT', exchange: 'binance', side: 'long', quantity: 0.5, entryPrice: 65800, markPrice: 67200, liquidationPrice: 32000, leverage: 5, margin: 6580, unrealizedPnl: 700, realizedPnl: 0, marginRatio: 0.35, riskLevel: 'safe', stopLoss: 63000, takeProfit: 72000 },
-  { id: 'p2', symbol: 'ETH/USDT', exchange: 'okx', side: 'short', quantity: 5, entryPrice: 3480, markPrice: 3420, liquidationPrice: 5200, leverage: 3, margin: 5800, unrealizedPnl: 300, realizedPnl: 0, marginRatio: 0.42, riskLevel: 'safe' },
-  { id: 'p3', symbol: 'SOL/USDT', exchange: 'binance', side: 'long', quantity: 50, entryPrice: 135, markPrice: 129, liquidationPrice: 68, leverage: 5, margin: 1350, unrealizedPnl: -300, realizedPnl: 0, marginRatio: 0.65, riskLevel: 'warning', stopLoss: 120 },
-  { id: 'p4', symbol: 'DOGE/USDT', exchange: 'binance', side: 'long', quantity: 50000, entryPrice: 0.09, markPrice: 0.078, liquidationPrice: 0.072, leverage: 10, margin: 450, unrealizedPnl: -600, realizedPnl: 0, marginRatio: 0.88, riskLevel: 'danger' },
-];
-
-const ORDERS: Order[] = [
-  { id: 'o1', symbol: 'BTC/USDT', exchange: 'binance', side: 'buy', type: 'limit', price: 66500, quantity: 0.1, filledQuantity: 0, status: 'submitted', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-  { id: 'o2', symbol: 'ETH/USDT', exchange: 'okx', side: 'sell', type: 'limit', price: 3500, quantity: 2, filledQuantity: 1.2, status: 'partial_filled', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-];
 
 // 模拟止盈止损编辑
 function StopLossTakeProfitEdit({ position, positions, setPositions }: { position: Position; positions: Position[]; setPositions: React.Dispatch<React.SetStateAction<Position[]>> }) {
@@ -38,18 +26,47 @@ function StopLossTakeProfitEdit({ position, positions, setPositions }: { positio
 }
 
 export default function TradePage() {
-  const [positions, setPositions] = useState<Position[]>(POSITIONS);
-  const [orders, setOrders] = useState<Order[]>(ORDERS);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showBalance, setShowBalance] = useState(false);
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [selectedPosition, setSelectedPosition] = useState<Position | null>(null);
   const [orderForm] = Form.useForm();
 
-  const totalEquity = 54320;
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [posRes, ordRes] = await Promise.allSettled([
+          tradingApi.getPositions(),
+          tradingApi.getOrders({ page_size: 50 }),
+        ]);
+
+        if (posRes.status === 'fulfilled') {
+          const p = (posRes.value.data as unknown as { data: Position[] })?.data
+            || (posRes.value.data as unknown as Position[]) || [];
+          setPositions(Array.isArray(p) ? p : []);
+        }
+
+        if (ordRes.status === 'fulfilled') {
+          const o = (ordRes.value.data as unknown as { items?: Order[] })?.items
+            || (ordRes.value.data as unknown as Order[]) || [];
+          setOrders(Array.isArray(o) ? o : []);
+        }
+      } catch {
+        // 后端未启动
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const totalEquity = positions.reduce((s, p) => s + (p.margin ?? 0), 0) + (positions.length > 0 ? 32100 : 0);
   const availableMargin = 32100;
-  const usedMargin = 13730;
-  const unrealizedPnl = positions.reduce((s, p) => s + p.unrealizedPnl, 0);
+  const usedMargin = positions.reduce((s, p) => s + (p.margin ?? 0), 0);
+  const unrealizedPnl = positions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0);
   const dangerPositions = positions.filter((p) => p.riskLevel === 'danger');
 
   // 下单
@@ -90,6 +107,7 @@ export default function TradePage() {
 
   // 强平距离计算
   const getLiqDist = (p: Position) => {
+    if (!p.markPrice || !p.liquidationPrice || p.markPrice === 0) return 0;
     if (p.side === 'long') return ((p.markPrice - p.liquidationPrice) / p.markPrice * 100);
     return ((p.liquidationPrice - p.markPrice) / p.markPrice * 100);
   };
@@ -100,9 +118,9 @@ export default function TradePage() {
       {dangerPositions.length > 0 && (
         <Alert
           type="error" banner showIcon icon={<WarningOutlined />}
-          message={<span>⚠️ <strong>强平预警</strong> — {dangerPositions.map((p) => `${p.symbol} 保证金率 ${(p.marginRatio * 100).toFixed(0)}%，距强平 ${getLiqDist(p).toFixed(1)}%`).join('；')}</span>}
+          message={<span>⚠️ <strong>强平预警</strong> — {dangerPositions.map((p) => `${p.symbol} 保证金率 ${((p.marginRatio ?? 0) * 100).toFixed(0)}%，距强平 ${getLiqDist(p).toFixed(1)}%`).join('；')}</span>}
           action={<Button danger size="small" onClick={() => { dangerPositions.forEach((p) => message.warning(`请尽快处理 ${p.symbol}`)); }}>立即处理</Button>}
-          style={{ marginBottom: 16, border: '2px solid var(--red-trade)', borderRadius: 6, animation: 'flash-red 1.5s ease-in-out infinite alternate' }}
+          style={{ marginBottom: 16, border: '2px solid var(--red-trade)', borderRadius: 6 }}
         />
       )}
 
@@ -120,8 +138,6 @@ export default function TradePage() {
             title="未实现盈亏"
             value={unrealizedPnl >= 0 ? `+${formatUSDT(unrealizedPnl)}` : formatUSDT(unrealizedPnl)}
             trend={unrealizedPnl >= 0 ? 'up' : 'down'}
-            // PnL 闪烁动画
-            style={{ animation: unrealizedPnl !== 0 ? `flash-${unrealizedPnl >= 0 ? 'green' : 'red'} 1s ease-in-out` : undefined } as React.CSSProperties}
           />
         </Col>
       </Row>
@@ -132,20 +148,20 @@ export default function TradePage() {
       <Tabs defaultActiveKey="positions" items={[
         {
           key: 'positions', label: `持仓 (${positions.length})`, children: (
-            <Table<Position> dataSource={positions} rowKey="id" size="small" pagination={false}
+            <Table<Position> dataSource={positions} rowKey="id" size="small" loading={loading} pagination={false}
               columns={[
                 { title: '交易对', dataIndex: 'symbol', render: (s: string) => <span style={{ fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{s}</span> },
                 { title: '方向', dataIndex: 'side', width: 60, render: (s: string) => <Tag color={s === 'long' ? 'green' : 'red'}>{s === 'long' ? '多' : '空'}</Tag> },
                 { title: '数量', dataIndex: 'quantity', width: 80, render: (v: number, r: Position) => formatCryptoAmount(v, r.symbol) },
-                { title: '开仓价', dataIndex: 'entryPrice', width: 100, render: (v: number) => `$${v.toLocaleString()}` },
-                { title: '标记价', dataIndex: 'markPrice', width: 100, render: (v: number) => `$${v.toLocaleString()}` },
+                { title: '开仓价', dataIndex: 'entryPrice', width: 100, render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
+                { title: '标记价', dataIndex: 'markPrice', width: 100, render: (v: number) => `$${(v ?? 0).toLocaleString()}` },
                 { title: '强平价', dataIndex: 'liquidationPrice', width: 100, render: (v: number, r: Position) => {
                   const dist = getLiqDist(r);
-                  return <Tooltip title={`距强平 ${dist.toFixed(1)}%`}><span style={{ color: dist < 10 ? 'var(--red-trade)' : 'var(--warning)', fontFamily: "'JetBrains Mono', monospace" }}>${v.toLocaleString()}</span></Tooltip>;
+                  return <Tooltip title={`距强平 ${dist.toFixed(1)}%`}><span style={{ color: dist < 10 ? 'var(--red-trade)' : 'var(--warning)', fontFamily: "'JetBrains Mono', monospace" }}>${(v ?? 0).toLocaleString()}</span></Tooltip>;
                 }},
                 { title: '未实现盈亏', dataIndex: 'unrealizedPnl', width: 110, align: 'right' as const,
                   render: (v: number) => <span style={{ color: v >= 0 ? 'var(--green-trade)' : 'var(--red-trade)', fontWeight: 600 }}>{v >= 0 ? '+' : ''}{formatUSDT(v)}</span> },
-                { title: '杠杆', dataIndex: 'leverage', width: 60, render: (v: number) => `${v}x` },
+                { title: '杠杆', dataIndex: 'leverage', width: 60, render: (v: number) => `${v ?? 0}x` },
                 { title: '止盈/止损', width: 170, render: (_: unknown, r: Position) => <StopLossTakeProfitEdit position={r} positions={positions} setPositions={setPositions} /> },
                 { title: '操作', width: 140, render: (_: unknown, r: Position) => (
                   <Space size="small">

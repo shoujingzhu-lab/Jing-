@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance, type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { CONFIG, API_PATHS, API_BASE_URL } from '@/lib/constants';
 import type { ApiResponse } from '@/lib/types';
+import { useAppStore } from '@/stores/appStore';
 
 const client: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -10,13 +11,15 @@ const client: AxiosInstance = axios.create({
   },
 });
 
-// 请求拦截器：自动附加 Token
+// 请求拦截器：自动附加 Token + 记录开始时间
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem(CONFIG.TOKEN_KEY);
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // 记录请求开始时间，用于计算延迟
+    (config as InternalAxiosRequestConfig & { _startTime: number })._startTime = Date.now();
     return config;
   },
   (error: AxiosError) => Promise.reject(error)
@@ -43,6 +46,13 @@ function isBackendResponse(data: unknown): data is BackendResponse {
 
 client.interceptors.response.use(
   (response) => {
+    // 计算 API 延迟并写入 store
+    const startTime = (response.config as InternalAxiosRequestConfig & { _startTime?: number })._startTime;
+    if (startTime) {
+      const latency = Date.now() - startTime;
+      useAppStore.getState().setMarketLatency(latency);
+    }
+
     const { data } = response;
     // 忽略二进制/流式数据
     if (data instanceof Blob || data instanceof ArrayBuffer || typeof data === 'string') {
@@ -52,6 +62,10 @@ client.interceptors.response.use(
       // 后端新格式：success===false 或 code>=400 视为业务错误
       if (data.success === false || (data.code != null && data.code >= 400)) {
         return Promise.reject(new Error(data.message || '请求失败'));
+      }
+      // 自动解包：后端返回 { success: true, data: {...} } → 将 inner data 提取到 response.data
+      if (data.success && data.data !== undefined) {
+        response.data = data.data;
       }
     }
     return response;

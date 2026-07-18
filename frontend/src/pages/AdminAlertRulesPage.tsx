@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, Switch, Modal, Form, Select, InputNumber, Input, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { mockAlertRules, mockDelay } from '@/lib/mock';
+import { notificationApi } from '@/lib/api';
 import StatusTag from '@/components/ui/StatusTag';
 import EmptyState from '@/components/ui/EmptyState';
 import type { SystemAlertRule } from '@/lib/types';
@@ -14,7 +14,21 @@ export default function AdminAlertRulesPage() {
   const [editing, setEditing] = useState<SystemAlertRule | null>(null);
   const [form] = Form.useForm();
 
-  useEffect(() => { mockDelay(mockAlertRules(), 400).then((r) => { setRules(r); setLoading(false); }); }, []);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await notificationApi.getRules();
+        const data = (res.data as unknown as { data: SystemAlertRule[] })?.data
+          || (res.data as unknown as SystemAlertRule[]) || [];
+        setRules(Array.isArray(data) ? data : []);
+      } catch {
+        // 后端可能未启动，初始化为空
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleSave = () => {
     form.validateFields().then((vals) => {

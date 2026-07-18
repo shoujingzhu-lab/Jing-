@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Card, Row, Col, Table, Tag, Button, Space, Progress, Collapse, Empty } from 'antd';
 import { ReloadOutlined, BulbOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { mockStrategyHealthList, mockMarketState, mockSuggestions, mockDelay } from '@/lib/mock';
+import { aiApi, strategyApi } from '@/lib/api';
 import StatCard from '@/components/ui/StatCard';
 import BaseChart from '@/components/Chart/BaseChart';
 import type { StrategyHealth, MarketState, OptimizationSuggestion } from '@/lib/types';
@@ -20,8 +20,49 @@ export default function AnalysisPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([mockDelay(mockStrategyHealthList(), 300), mockDelay(mockMarketState(), 200), mockDelay(mockSuggestions(), 250)])
-      .then(([h, m, s]) => { setHealthList(h); setMarket(m); setSuggestions(s); setLoading(false); });
+    const loadAll = async () => {
+      try {
+        const [strategiesRes, marketRes] = await Promise.allSettled([
+          strategyApi.getList({ page_size: 50 }),
+          aiApi.getMarketState(),
+        ]);
+
+        // 从策略列表加载健康度
+        const strategies = strategiesRes.status === 'fulfilled'
+          ? ((strategiesRes.value.data as unknown as { items?: Array<Record<string, unknown>> })?.items || [])
+          : [];
+
+        if (Array.isArray(strategies) && strategies.length > 0) {
+          // 为每个策略获取健康度评分
+          const healthResults = await Promise.allSettled(
+            strategies.slice(0, 5).map((s) =>
+              aiApi.getHealthScore(s.id as string).catch(() => null)
+            )
+          );
+          const healthData: StrategyHealth[] = [];
+          healthResults.forEach((hr, idx) => {
+            if (hr.status === 'fulfilled' && hr.value) {
+              const d = (hr.value.data as unknown as { data: StrategyHealth })?.data
+                || (hr.value.data as unknown as StrategyHealth);
+              if (d) healthData.push(d);
+            }
+          });
+          setHealthList(healthData);
+        }
+
+        // 市场状态
+        if (marketRes.status === 'fulfilled') {
+          const m = (marketRes.value.data as unknown as { data: MarketState })?.data
+            || (marketRes.value.data as unknown as MarketState);
+          setMarket(m as MarketState);
+        }
+
+        setLoading(false);
+      } catch {
+        setLoading(false);
+      }
+    };
+    loadAll();
   }, []);
 
   // 雷达图数据
@@ -59,38 +100,40 @@ export default function AnalysisPage() {
               <div style={{ padding: 12, background: 'var(--bg-primary)', borderRadius: 8, textAlign: 'center' }}>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>当前状态</div>
                 <Tag color="gold" style={{ fontSize: 16, marginTop: 8, padding: '2px 12px' }}>{market.currentState}</Tag>
-                <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>置信度: {(market.confidence * 100).toFixed(0)}%</div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>置信度: {((market.confidence ?? 0) * 100).toFixed(0)}%</div>
               </div>
             </Col>
             <Col xs={12} sm={6} md={4}>
               <div style={{ padding: 12, background: 'var(--bg-primary)', borderRadius: 8, textAlign: 'center' }}>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>BTC 占比</div>
-                <div style={{ color: 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{(market.btcDominance * 100).toFixed(1)}%</div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{((market.btcDominance ?? 0) * 100).toFixed(1)}%</div>
               </div>
             </Col>
             <Col xs={12} sm={6} md={4}>
               <div style={{ padding: 12, background: 'var(--bg-primary)', borderRadius: 8, textAlign: 'center' }}>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>恐惧贪婪</div>
-                <div style={{ color: market.fearGreedIndex < 30 ? '#EF5350' : market.fearGreedIndex > 70 ? '#26A69A' : 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{market.fearGreedIndex}</div>
+                <div style={{ color: (market.fearGreedIndex ?? 50) < 30 ? '#EF5350' : (market.fearGreedIndex ?? 50) > 70 ? '#26A69A' : 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{market.fearGreedIndex ?? 50}</div>
               </div>
             </Col>
             <Col xs={12} sm={6} md={4}>
               <div style={{ padding: 12, background: 'var(--bg-primary)', borderRadius: 8, textAlign: 'center' }}>
                 <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>山寨季指数</div>
-                <div style={{ color: market.altcoinSeasonIndex > 75 ? '#26A69A' : 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{market.altcoinSeasonIndex}</div>
+                <div style={{ color: (market.altcoinSeasonIndex ?? 50) > 75 ? '#26A69A' : 'var(--text-primary)', fontSize: 20, fontWeight: 'bold', marginTop: 4 }}>{market.altcoinSeasonIndex ?? 50}</div>
               </div>
             </Col>
           </Row>
 
           {/* 状态转移概率 */}
-          <div style={{ marginTop: 16 }}>
-            <Typography.Text style={{ color: 'var(--text-secondary)', fontSize: 13 }}>市场状态转移概率: </Typography.Text>
-            {market.transitionProbabilities.map((tp) => (
-              <Tag key={tp.state} color={tp.probability > 0.3 ? 'blue' : 'default'} style={{ marginLeft: 4 }}>
-                {tp.state}: {(tp.probability * 100).toFixed(0)}%
-              </Tag>
-            ))}
-          </div>
+          {market.transitionProbabilities && (
+            <div style={{ marginTop: 16 }}>
+              <Typography.Text style={{ color: 'var(--text-secondary)', fontSize: 13 }}>市场状态转移概率: </Typography.Text>
+              {market.transitionProbabilities.map((tp) => (
+                <Tag key={tp.state} color={tp.probability > 0.3 ? 'blue' : 'default'} style={{ marginLeft: 4 }}>
+                  {tp.state}: {(tp.probability * 100).toFixed(0)}%
+                </Tag>
+              ))}
+            </div>
+          )}
         </Card>
       )}
 
@@ -98,7 +141,11 @@ export default function AnalysisPage() {
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={16}>
           <Card title="策略健康度" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            <Table columns={healthCols} dataSource={healthList} rowKey="strategyId" pagination={false} size="middle" scroll={{ x: 800 }} />
+            {healthList.length > 0 ? (
+              <Table columns={healthCols} dataSource={healthList} rowKey="strategyId" pagination={false} size="middle" scroll={{ x: 800 }} />
+            ) : (
+              <Empty description="暂无策略数据，请先创建策略并进行回测" />
+            )}
           </Card>
         </Col>
         <Col xs={24} lg={8}>
@@ -112,46 +159,21 @@ export default function AnalysisPage() {
 
       {/* 优化建议 */}
       <Card title={<span><BulbOutlined /> 优化建议</span>} style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
-        {suggestions.map((sug) => (
-          <div key={sug.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
-            <Space>
-              <Tag color={sug.impact === 'high' ? 'red' : sug.impact === 'medium' ? 'orange' : 'blue'}>{sug.impact === 'high' ? '高' : sug.impact === 'medium' ? '中' : '低'}</Tag>
-              <Tag>{sug.type === 'parameter' ? '参数' : sug.type === 'market_adaptation' ? '市场适应' : '风控'}</Tag>
-              <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{sug.title}</span>
-            </Space>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4, marginLeft: 4 }}>{sug.description}</div>
-            {sug.currentValue && <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2, marginLeft: 4 }}>当前: {sug.currentValue} → 建议: {sug.suggestedValue}</div>}
-          </div>
-        ))}
-      </Card>
-
-      {/* 策略-市场适配矩阵（简化热力图） */}
-      <Card title="策略-市场适配矩阵" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', marginTop: 16 }}>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', color: 'var(--text-primary)' }}>
-            <thead>
-              <tr>
-                <th style={{ padding: 8, textAlign: 'left', color: 'var(--text-secondary)', fontSize: 12 }}>策略 / 市场状态</th>
-                {['趋势上涨', '震荡偏多', '横盘', '震荡偏空', '趋势下跌'].map((s) => <th key={s} style={{ padding: 8, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>{s}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {healthList.map((h) => (
-                <tr key={h.strategyId} style={{ borderTop: '1px solid var(--border-color)' }}>
-                  <td style={{ padding: 10 }}>{h.strategyName}</td>
-                  {Array.from({ length: 5 }, (_, i) => {
-                    const fitness = 0.4 + Math.random() * 0.55;
-                    return (
-                      <td key={i} style={{ padding: 8, textAlign: 'center' }}>
-                        <span style={{ padding: '4px 8px', borderRadius: 4, fontSize: 12, background: fitness > 0.7 ? 'rgba(38,166,154,0.3)' : fitness > 0.5 ? 'rgba(240,185,11,0.2)' : 'rgba(239,83,80,0.15)', color: fitness > 0.7 ? '#26A69A' : fitness > 0.5 ? '#F0B90B' : '#EF5350' }}>{(fitness * 100).toFixed(0)}%</span>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {suggestions.length === 0 ? (
+          <Empty description="暂无优化建议" />
+        ) : (
+          suggestions.map((sug) => (
+            <div key={sug.id} style={{ padding: '10px 0', borderBottom: '1px solid var(--border-color)' }}>
+              <Space>
+                <Tag color={sug.impact === 'high' ? 'red' : sug.impact === 'medium' ? 'orange' : 'blue'}>{sug.impact === 'high' ? '高' : sug.impact === 'medium' ? '中' : '低'}</Tag>
+                <Tag>{sug.type === 'parameter' ? '参数' : sug.type === 'market_adaptation' ? '市场适应' : '风控'}</Tag>
+                <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{sug.title}</span>
+              </Space>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 4, marginLeft: 4 }}>{sug.description}</div>
+              {sug.currentValue && <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 2, marginLeft: 4 }}>当前: {sug.currentValue} → 建议: {sug.suggestedValue}</div>}
+            </div>
+          ))
+        )}
       </Card>
     </div>
   );

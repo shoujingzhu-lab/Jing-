@@ -1,24 +1,79 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Typography, Card, Table, Button, Tag, Space, Modal, Form, Input, Select, message, Progress } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined } from '@ant-design/icons';
-import { mockExchangeStatus, mockDelay } from '@/lib/mock';
+import { adminApi, tradingApi } from '@/lib/api';
 import StatusTag from '@/components/ui/StatusTag';
 import EmptyState from '@/components/ui/EmptyState';
+import type { ExchangeStatus } from '@/lib/types';
 import type { ColumnsType } from 'antd/es/table';
 
 interface ExchangeConfig { id: string; exchange: string; apiKey: string; apiSecret: string; status: string; latency: number; successRate: number }
 
-const MOCK_EXCHANGES: ExchangeConfig[] = [
-  { id: 'ex-1', exchange: 'binance', apiKey: 'bin_****a1b2', apiSecret: '••••••••', status: 'connected', latency: 85, successRate: 0.998 },
-  { id: 'ex-2', exchange: 'okx', apiKey: 'okx_****c3d4', apiSecret: '••••••••', status: 'reconnecting', latency: 120, successRate: 0.992 },
-  { id: 'ex-3', exchange: 'bybit', apiKey: 'byb_****e5f6', apiSecret: '••••••••', status: 'connected', latency: 95, successRate: 0.997 },
-];
-
 export default function AdminExchangesPage() {
-  const [exchanges, setExchanges] = useState<ExchangeConfig[]>(MOCK_EXCHANGES);
+  const [exchanges, setExchanges] = useState<ExchangeConfig[]>([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ExchangeConfig | null>(null);
   const [form] = Form.useForm();
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [exStatusRes, apiKeysRes] = await Promise.allSettled([
+          adminApi.getExchangeStatus(),
+          tradingApi.getApiKeys(),
+        ]);
+
+        const configs: ExchangeConfig[] = [];
+
+        // 从交易所状态获取连接信息
+        if (exStatusRes.status === 'fulfilled') {
+          const statuses = ((exStatusRes.value.data as unknown as { data: ExchangeStatus[] })?.data
+            || (exStatusRes.value.data as unknown as ExchangeStatus[]) || []) as ExchangeStatus[];
+          statuses.forEach((s: ExchangeStatus, i: number) => {
+            configs.push({
+              id: `ex-${s.exchange || i}`,
+              exchange: s.exchange,
+              apiKey: '****',
+              apiSecret: '••••••••',
+              status: s.wsStatus || 'disconnected',
+              latency: s.restLatency || 0,
+              successRate: s.successRate24h || 0,
+            });
+          });
+        }
+
+        // 从 API Keys 获取绑定的 key 信息
+        if (apiKeysRes.status === 'fulfilled') {
+          const keys = ((apiKeysRes.value.data as unknown as { data: unknown[] })?.data
+            || (apiKeysRes.value.data as unknown as unknown[]) || []) as Array<Record<string, unknown>>;
+          keys.forEach((k: Record<string, unknown>, i: number) => {
+            const existing = configs.find((c) => c.exchange === k.exchange);
+            if (existing) {
+              existing.apiKey = (k.label as string) || (k.access_key as string)?.substring(0, 8) + '****' || '****';
+            } else {
+              configs.push({
+                id: `ex-key-${k.id || i}`,
+                exchange: (k.exchange as string) || 'unknown',
+                apiKey: (k.label as string) || '****',
+                apiSecret: '••••••••',
+                status: 'connected',
+                latency: 0,
+                successRate: 1.0,
+              });
+            }
+          });
+        }
+
+        setExchanges(configs);
+      } catch {
+        // 后端未启动时为空
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const handleSave = () => {
     form.validateFields().then((vals) => {
@@ -58,10 +113,10 @@ export default function AdminExchangesPage() {
         </Space>
       </div>
       <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-        {exchanges.length === 0 ? (
+        {!loading && exchanges.length === 0 ? (
           <EmptyState title="未配置交易所" description="添加交易所 API 配置以连接交易" action={<Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加交易所</Button>} />
         ) : (
-          <Table columns={cols} dataSource={exchanges} rowKey="id" pagination={false} size="middle" />
+          <Table columns={cols} dataSource={exchanges} rowKey="id" loading={loading} pagination={false} size="middle" />
         )}
       </Card>
       <Modal title={editing ? '编辑交易所' : '添加交易所'} open={modalOpen} onCancel={() => { setModalOpen(false); setEditing(null); form.resetFields(); }} onOk={handleSave} okText="保存" destroyOnClose>
