@@ -12,17 +12,14 @@ export default function Sidebar() {
   const collapsed = useSettingsStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useSettingsStore((s) => s.toggleSidebar);
 
-  // 根据当前路径确定子导航菜单
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const currentModule = pathSegments[0] || 'dashboard';
   const sidebarItems = SIDEBAR_MENUS[currentModule] || [];
 
-  // 如果当前模块没有子导航，隐藏侧边栏
   if (sidebarItems.length === 0 && currentModule !== 'dashboard') {
     return null;
   }
 
-  // 仪表盘也不显示侧边栏
   if (currentModule === 'dashboard') {
     return null;
   }
@@ -43,6 +40,8 @@ export default function Sidebar() {
       style={{
         background: 'var(--bg-secondary)',
         borderRight: '1px solid var(--border-color)',
+        transition: 'width 250ms cubic-bezier(0.4, 0, 0.2, 1), min-width 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+        overflow: 'hidden',
       }}
     >
       <div
@@ -55,14 +54,25 @@ export default function Sidebar() {
         }}
       >
         {!collapsed && (
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>导航</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.5px' }}>
+            导航
+          </span>
         )}
         <Button
           type="text"
           size="small"
           icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
           onClick={toggleSidebar}
-          style={{ color: 'var(--text-secondary)' }}
+          style={{
+            color: 'var(--text-secondary)',
+            transition: 'transform 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.transform = 'scale(1.15)';
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+          }}
         />
       </div>
       <Menu
