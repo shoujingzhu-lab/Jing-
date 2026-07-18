@@ -17,8 +17,9 @@ class BinanceAdapter(BaseExchangeAdapter):
 
     _exchange_name = "binance"
 
-    def __init__(self, api_key: str = "", secret: str = "", testnet: bool = False):
-        super().__init__(api_key, secret, testnet=testnet)
+    def __init__(self, api_key: str = "", secret: str = "", passphrase: Optional[str] = None, testnet: bool = False):
+        super().__init__(api_key, secret, passphrase, testnet)
+        self._exchange_name = "binance"
         self._spot: Optional[ccxt.binance] = None
         self._futures: Optional[ccxt.binanceusdm] = None
 
@@ -149,6 +150,7 @@ class OKXAdapter(BaseExchangeAdapter):
 
     def __init__(self, api_key: str = "", secret: str = "", passphrase: Optional[str] = None, testnet: bool = False):
         super().__init__(api_key, secret, passphrase, testnet)
+        self._exchange_name = "okx"
         self._ex: Optional[ccxt.okx] = None
 
     async def _get(self) -> ccxt.okx:
@@ -239,8 +241,9 @@ class BybitAdapter(BaseExchangeAdapter):
 
     _exchange_name = "bybit"
 
-    def __init__(self, api_key: str = "", secret: str = "", testnet: bool = False):
-        super().__init__(api_key, secret, testnet=testnet)
+    def __init__(self, api_key: str = "", secret: str = "", passphrase: Optional[str] = None, testnet: bool = False):
+        super().__init__(api_key, secret, passphrase, testnet)
+        self._exchange_name = "bybit"
         self._ex: Optional[ccxt.bybit] = None
 
     async def _get(self) -> ccxt.bybit:
@@ -327,8 +330,9 @@ class GateIOAdapter(BaseExchangeAdapter):
 
     _exchange_name = "gateio"
 
-    def __init__(self, api_key: str = "", secret: str = "", testnet: bool = False):
-        super().__init__(api_key, secret, testnet=testnet)
+    def __init__(self, api_key: str = "", secret: str = "", passphrase: Optional[str] = None, testnet: bool = False):
+        super().__init__(api_key, secret, passphrase, testnet)
+        self._exchange_name = "gateio"
         self._ex: Optional[ccxt.gate] = None
 
     async def _get(self) -> ccxt.gate:
@@ -426,4 +430,4 @@ def create_adapter(
     adapter_class = EXCHANGE_MAP.get(exchange.lower())
     if adapter_class is None:
         raise ValueError(f"不支持的交易所: {exchange}. 支持: {list(EXCHANGE_MAP)}")
-    return adapter_class(api_key, secret, passphrase, testnet)
+    return adapter_class(api_key=api_key, secret=secret, passphrase=passphrase, testnet=testnet)

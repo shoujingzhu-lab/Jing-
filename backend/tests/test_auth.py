@@ -83,8 +83,8 @@ class TestJWT:
             decode_token("not-a-valid-jwt-token-string")
 
     def test_decode_wrong_secret(self):
-        import jwt as pyjwt
-        bad_token = pyjwt.encode(
+        from jose import jwt as jose_jwt
+        bad_token = jose_jwt.encode(
             {"sub": "test", "exp": 9999999999},
             "wrong-secret-key",
             algorithm="HS256",
@@ -161,7 +161,7 @@ class TestAuthAPI:
         return {"Authorization": f"Bearer {token}"}
 
     @pytest.mark.asyncio
-    async def test_register_new_user(self, async_client: AsyncClient):
+    async def test_register_new_user(self, async_client: AsyncClient, seed_test_user):
         import uuid
         unique_email = f"newuser_{uuid.uuid4().hex[:8]}@example.com"
         resp = await async_client.post(
@@ -173,29 +173,24 @@ class TestAuthAPI:
                 "confirm_password": "StrongPass123!",
             },
         )
-        assert resp.status_code in (201, 400)  # 400 if user exists, 201 if new
+        assert resp.status_code in (201, 400)
 
     @pytest.mark.asyncio
-    async def test_login(self, async_client: AsyncClient):
+    async def test_login(self, async_client: AsyncClient, seed_test_user):
         resp = await async_client.post(
             "/api/v1/auth/login",
-            data={
-                "username": "testuser",
-                "password": "testpass",
-            },
+            data={"username": "testuser", "password": "testpass"},
         )
-        # May return 200 or 401 depending on test user state
         assert resp.status_code in (200, 401)
 
     @pytest.mark.asyncio
-    async def test_protected_route_without_token(self, async_client: AsyncClient):
+    async def test_protected_route_without_token(self, async_client: AsyncClient, seed_test_user):
         resp = await async_client.get("/api/v1/users/me")
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_protected_route_with_token(self, async_client: AsyncClient, auth_headers):
+    async def test_protected_route_with_token(self, async_client: AsyncClient, auth_headers, seed_test_user):
         resp = await async_client.get("/api/v1/users/me", headers=auth_headers)
-        # 401 if user not in test DB, 200 if seeded correctly
         assert resp.status_code in (200, 401)
 
 

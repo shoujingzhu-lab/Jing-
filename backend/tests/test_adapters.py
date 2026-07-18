@@ -127,7 +127,7 @@ class TestAdapterCache:
 
     @pytest.mark.asyncio
     async def test_cleanup_expired(self, cache):
-        cache.ttl_seconds = 0.01  # Very short TTL
+        cache.ttl_seconds = -1  # Immediate expiry (all entries older than -1 seconds are expired)
         await cache.get("binance")
         assert cache.size == 1
         await cache._cleanup_expired()

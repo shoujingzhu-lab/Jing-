@@ -162,7 +162,8 @@ class RiskEngine:
         # 更新权益追踪
         self._current_equity[user_id] = self._current_equity.get(user_id, 0.0) + pnl
         current = self._current_equity[user_id]
-        peak = self._peak_equity.get(user_id, current)
+        # 初始峰值从 0 开始比较，确保首笔盈利交易能设置峰值
+        peak = self._peak_equity.get(user_id, 0)
         if current > peak:
             self._peak_equity[user_id] = current
 

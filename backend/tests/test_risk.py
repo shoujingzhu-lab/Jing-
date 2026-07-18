@@ -116,8 +116,9 @@ class TestCircuitBreaker:
 # ============================================================
 class TestPreTradeRules:
     async def test_daily_loss_limit_exceeded(self, engine, sample_order):
-        # 先注入亏损（用 scope=account 确保规则生效）
-        engine._daily_pnl["test-user:2026-06-08"] = -600
+        from datetime import datetime, UTC
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        engine._daily_pnl[f"test-user:{today}"] = -600
         rule = _make_rule(scope="account", rule_type="daily_loss_limit", params={"limit": 500, "limit_type": "absolute"})
         passed, reason = await engine.pre_trade_check(
             "test-user", "strategy-1", sample_order, [rule], [], None,
@@ -126,7 +127,9 @@ class TestPreTradeRules:
         assert "亏损" in reason
 
     async def test_daily_loss_within_limit(self, engine, sample_order):
-        engine._daily_pnl["test-user:2026-06-08"] = -100
+        from datetime import datetime, UTC
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
+        engine._daily_pnl[f"test-user:{today}"] = -100
         rule = _make_rule(scope="account", rule_type="daily_loss_limit", params={"limit": 500, "limit_type": "absolute"})
         passed, reason = await engine.pre_trade_check(
             "test-user", "strategy-1", sample_order, [rule], [], None,
@@ -250,7 +253,7 @@ class TestPositionRisk:
 # API 集成测试
 # ============================================================
 class TestRiskAPI:
-    async def test_create_and_list_rule(self, async_client: AsyncClient, auth_headers: dict):
+    async def test_create_and_list_rule(self, async_client: AsyncClient, auth_headers: dict, seed_test_user):
         resp = await async_client.post(
             "/api/v1/risk/rules",
             params={
@@ -266,7 +269,7 @@ class TestRiskAPI:
         resp2 = await async_client.get("/api/v1/risk/rules", headers=auth_headers)
         assert resp2.status_code == 200
 
-    async def test_pre_check_endpoint(self, async_client: AsyncClient, auth_headers: dict):
+    async def test_pre_check_endpoint(self, async_client: AsyncClient, auth_headers: dict, seed_test_user):
         resp = await async_client.post(
             "/api/v1/risk/pre-check",
             params={
@@ -282,7 +285,7 @@ class TestRiskAPI:
         data = resp.json()
         assert data["data"]["passed"] is True
 
-    async def test_check_position_endpoint(self, async_client: AsyncClient, auth_headers: dict):
+    async def test_check_position_endpoint(self, async_client: AsyncClient, auth_headers: dict, seed_test_user):
         resp = await async_client.post(
             "/api/v1/risk/check-position",
             params={

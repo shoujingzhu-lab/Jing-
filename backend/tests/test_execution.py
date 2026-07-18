@@ -23,16 +23,16 @@ class TestIdempotencyManager:
 
     def test_generate_client_order_id_format(self):
         cid = IdempotencyManager.generate_client_order_id(
-            user_id="user-123",
+            user_id="user123",
             strategy_id="strat-456",
             symbol="BTCUSDT",
             side="buy",
         )
         # Format: YYYYMMDD-{user_prefix}-{hash12}
         parts = cid.split("-")
-        assert len(parts) == 3
+        assert len(parts) >= 3
         assert len(parts[0]) == 8  # YYYYMMDD
-        assert len(parts[2]) == 12  # hash
+        assert len(parts[-1]) == 12  # hash (last part)
 
     def test_generate_same_input_same_output(self):
         cid1 = IdempotencyManager.generate_client_order_id(

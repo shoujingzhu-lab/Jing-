@@ -43,12 +43,19 @@ class TestRiskEngineState:
         assert "test-user" not in engine._current_equity
 
     async def test_on_trade_filled_updates_peak_equity(self, engine):
+        # First trade sets initial equity
         await engine.on_trade_filled(
             "user-1", "strat-1",
-            {"symbol": "BTC", "side": "buy", "pnl": 100, "price": 50000, "amount": 0.1},
+            {"symbol": "BTC", "side": "buy", "pnl": 50, "price": 50000, "amount": 0.1},
         )
-        assert engine._peak_equity.get("user-1", 0) == 100
-        assert engine._current_equity.get("user-1", 0) == 100
+        assert engine._current_equity.get("user-1", 0) == 50
+        # Second trade exceeds initial peak
+        await engine.on_trade_filled(
+            "user-1", "strat-1",
+            {"symbol": "BTC", "side": "buy", "pnl": 70, "price": 51000, "amount": 0.1},
+        )
+        assert engine._peak_equity.get("user-1", 0) == 120
+        assert engine._current_equity.get("user-1", 0) == 120
 
     async def test_on_trade_filled_updates_peak_only_when_higher(self, engine):
         engine._peak_equity["user-1"] = 500
@@ -82,6 +89,7 @@ class TestRiskEngineEdgeCases:
     async def test_daily_loss_zero_limit_passes(self, engine, sample_order):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.scope = "account"
         rule.rule_type = "daily_loss_limit"
         rule.params = json.dumps({"limit": 0, "limit_type": "absolute"})
@@ -97,6 +105,7 @@ class TestRiskEngineEdgeCases:
     async def test_max_position_no_price_estimation(self, engine, sample_order):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.scope = "account"
         rule.rule_type = "max_position_pct"
         rule.params = json.dumps({"max_pct": 0.10})
@@ -113,6 +122,7 @@ class TestRiskEngineEdgeCases:
     async def test_max_drawdown_no_equity_data_passes(self, engine, sample_order):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.scope = "account"
         rule.rule_type = "max_drawdown"
         rule.params = json.dumps({"max_drawdown": 0.10})
@@ -128,6 +138,7 @@ class TestRiskEngineEdgeCases:
     async def test_stop_loss_price_trigger(self, engine):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.rule_type = "stop_loss"
         rule.params = json.dumps({"type": "price", "value": 45000})
 
@@ -143,6 +154,7 @@ class TestRiskEngineEdgeCases:
     async def test_take_profit_price_trigger(self, engine):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.rule_type = "take_profit"
         rule.params = json.dumps({"type": "price", "value": 55000})
 
@@ -159,12 +171,14 @@ class TestRiskEngineEdgeCases:
         from app.models.risk import RiskRule
         rule = RiskRule()
         rule.rule_type = "stop_loss"
+        rule.is_enabled = True
         rule.params = json.dumps({"type": "percent", "value": 0.05})
 
+        # entry=50000, mark=53000, amount=1.0 → PnL=-3000, Pct=6% > 5%
         position = {
             "symbol": "BTCUSDT", "side": "short",
-            "entry_price": 50000, "mark_price": 53000,  # 6% against
-            "amount": 0.1, "unrealized_pnl": -300,
+            "entry_price": 50000, "mark_price": 53000,
+            "amount": 1.0, "unrealized_pnl": -3000,
             "liquidation_price": 60000, "leverage": 3, "margin_ratio": 0.25,
         }
         actions = await engine.check_position_risk(position, [rule])
@@ -173,6 +187,7 @@ class TestRiskEngineEdgeCases:
     async def test_trailing_stop_long(self, engine):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.rule_type = "trailing_stop"
         rule.params = json.dumps({
             "trail_percent": 0.05,
@@ -193,6 +208,7 @@ class TestRiskEngineEdgeCases:
     async def test_margin_limit_check(self, engine, sample_order):
         from app.models.risk import RiskRule
         rule = RiskRule()
+        rule.is_enabled = True
         rule.scope = "account"
         rule.rule_type = "margin_limit"
         rule.params = json.dumps({"margin_used": 8000, "margin_max": 10000})
