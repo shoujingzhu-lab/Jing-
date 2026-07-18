@@ -45,6 +45,8 @@ class Kline(Base):
     __table_args__ = (
         Index("idx_klines_symbol_interval_time", "symbol", "interval", "open_time"),
         Index("idx_klines_exchange_symbol", "exchange", "symbol", "interval"),
+        Index("idx_klines_exchange_time", "exchange", "open_time"),
+        {"comment": "K线数据 — 建议在 TimescaleDB 中转为 hypertable: SELECT create_hypertable('klines', 'open_time');"},
     )
 
     def __repr__(self) -> str:

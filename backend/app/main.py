@@ -2,6 +2,7 @@
 FastAPI 应用入口
 ================
 虚拟货币量化交易系统 — 后端服务主入口。
+集成: Sentry, Prometheus, Rate Limiting, Request ID, 安全头.
 """
 
 from contextlib import asynccontextmanager
@@ -10,13 +11,24 @@ from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from app.core.config import settings
 from app.core.database import check_database_connection, close_database_connections
+from app.core.logging import setup_logging, setup_sentry, get_logger
+from app.core.monitoring import init_metrics, get_metrics, PrometheusMiddleware
+from app.core.middleware import (
+    RequestIDMiddleware,
+    RequestBodySizeMiddleware,
+    SecurityHeadersMiddleware,
+)
 from app.api import api_router
 from app.ws.handlers import router as ws_router
 from app.ws.broadcaster import data_broadcaster
+
+# 初始化日志（最早调用）
+setup_logging()
+logger = get_logger("main")
 
 
 # ============================================================
@@ -76,29 +88,37 @@ TAGS_METADATA = [
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """应用启动/关闭时的生命周期事件"""
-    # 启动时
-    print(f"[START] {settings.APP_NAME} v{settings.APP_VERSION} starting...")
-    print(f"   Environment: {settings.APP_ENV}")
-    print(f"   Debug: {settings.DEBUG}")
+    # ---- 启动 ----
+    logger.info(
+        f"Starting {settings.APP_NAME} v{settings.APP_VERSION}",
+        extra={"environment": settings.APP_ENV, "debug": settings.DEBUG},
+    )
+
+    # 初始化 Sentry（必须在 logging 之后）
+    if settings.SENTRY_DSN:
+        setup_sentry()
+
+    # 初始化 Prometheus 指标
+    init_metrics()
 
     # 检查数据库连接
     db_status = await check_database_connection()
     for db_name, status in db_status.items():
-        icon = "[OK]" if status == "connected" else "[FAIL]"
-        print(f"   {icon} {db_name} database: {status}")
+        log_fn = logger.info if status == "connected" else logger.error
+        log_fn(f"Database [{db_name}]: {status}")
 
     # 启动 WebSocket 数据广播器
     await data_broadcaster.start()
-    print(f"   [OK] WebSocket broadcaster started")
+    logger.info("WebSocket broadcaster started")
 
     yield
 
-    # 关闭时
-    print("[STOP] Shutting down...")
+    # ---- 关闭 ----
+    logger.info("Shutting down...")
     await data_broadcaster.stop()
-    print("   [OK] WebSocket broadcaster stopped")
+    logger.info("WebSocket broadcaster stopped")
     await close_database_connections()
-    print("   Database connections closed.")
+    logger.info("Database connections closed")
 
 
 # ============================================================
@@ -150,9 +170,9 @@ Bearer Token (JWT)：在请求头中添加 `Authorization: Bearer <token>`
 }
 ```
     """,
-    docs_url="/api/docs" if settings.DEBUG else None,
-    redoc_url="/api/redoc" if settings.DEBUG else None,
-    openapi_url="/api/openapi.json" if settings.DEBUG else None,
+    docs_url="/api/docs" if settings.should_show_docs else None,
+    redoc_url="/api/redoc" if settings.should_show_docs else None,
+    openapi_url="/api/openapi.json" if settings.should_show_docs else None,
     lifespan=lifespan,
     openapi_tags=TAGS_METADATA,
     contact={
@@ -166,10 +186,10 @@ Bearer Token (JWT)：在请求头中添加 `Authorization: Bearer <token>`
 )
 
 # ============================================================
-# 中间件
+# 中间件（按添加顺序执行 — 后添加的先执行）
 # ============================================================
 
-# CORS
+# 1. CORS（最早添加，最后执行）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -178,11 +198,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 2. Prometheus 指标收集
+if settings.PROMETHEUS_ENABLED:
+    app.add_middleware(PrometheusMiddleware)
+
+# 3-5. 自定义中间件
+app.add_middleware(RequestBodySizeMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestIDMiddleware)
+
+# ============================================================
+# Rate Limiting (SlowAPI)
+# ============================================================
+if settings.RATE_LIMIT_ENABLED:
+    try:
+        from slowapi import Limiter, _rate_limit_exceeded_handler
+        from slowapi.util import get_remote_address
+        from slowapi.errors import RateLimitExceeded
+
+        limiter = Limiter(
+            key_func=get_remote_address,
+            default_limits=[settings.RATE_LIMIT_DEFAULT],
+        )
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        logger.info(
+            f"Rate limiting enabled: default={settings.RATE_LIMIT_DEFAULT}, "
+            f"auth={settings.RATE_LIMIT_AUTH}, trading={settings.RATE_LIMIT_TRADING}"
+        )
+    except ImportError:
+        logger.warning("slowapi not installed, rate limiting disabled")
+        limiter = None
+
 # ============================================================
 # 全局异常处理
 # ============================================================
 
-# 策略模块异常 → HTTP 响应
 from app.services.strategy import StrategyError
 from app.services.backtest import BacktestError
 
@@ -216,18 +267,44 @@ async def backtest_error_handler(request: Request, exc: BacktestError):
     )
 
 
+# 全局 Sentry 集成 — 未捕获异常上报到 Sentry
+if settings.SENTRY_DSN:
+    try:
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+    except ImportError:
+        pass
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """全局未捕获异常处理"""
+    """全局未捕获异常处理 — 区分开发/生产环境"""
     import traceback
 
-    error_detail = traceback.format_exc() if settings.DEBUG else "Internal server error"
+    logger.error(
+        f"Unhandled exception: {type(exc).__name__}: {exc}",
+        exc_info=True,
+        extra={"path": str(request.url.path), "method": request.method},
+    )
+
+    if settings.DEBUG or settings.is_development:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "internal_server_error",
+                "message": str(exc),
+                "detail": traceback.format_exc(),
+                "request_id": getattr(request.state, "request_id", "-"),
+            },
+        )
+
+    # 生产环境不泄露错误细节
     return JSONResponse(
         status_code=500,
         content={
-            "error": "internal_server_error",
-            "message": str(exc) if settings.DEBUG else "An unexpected error occurred",
-            "detail": error_detail if settings.DEBUG else None,
+            "success": False,
+            "code": 500,
+            "message": "An unexpected error occurred",
+            "request_id": getattr(request.state, "request_id", "-"),
         },
     )
 
@@ -238,30 +315,102 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(ws_router)  # WebSocket 路由
 
+# ============================================================
+# Prometheus 指标端点
+# ============================================================
+@app.get("/metrics", tags=["Monitoring"])
+async def prometheus_metrics():
+    """Prometheus 指标采集端点"""
+    if not settings.PROMETHEUS_ENABLED:
+        return Response(content="Prometheus metrics disabled", status_code=404)
+    return Response(content=get_metrics(), media_type="text/plain; charset=utf-8")
+
 
 # ============================================================
-# 健康检查
+# 健康检查（增强版）
 # ============================================================
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Monitoring"])
 async def health_check():
-    """服务健康检查端点"""
+    """
+    增强版服务健康检查。
+
+    返回:
+    - 应用状态
+    - 数据库连接状态
+    - Redis 连接状态（如已配置）
+    - 版本信息
+    """
+    import asyncio
+
     db_status = await check_database_connection()
-    all_ok = all(v == "connected" for v in db_status.values())
+
+    # Redis 健康检查
+    redis_status = "unknown"
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL, socket_timeout=2)
+        await r.ping()
+        await r.close()
+        redis_status = "connected"
+    except Exception:
+        redis_status = "disconnected"
+
+    all_db_ok = all(v == "connected" for v in db_status.values())
+    all_ok = all_db_ok and redis_status == "connected"
+
     return {
         "status": "healthy" if all_ok else "degraded",
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.APP_ENV,
+        "uptime_seconds": (
+            round(
+                __import__("time").time()
+                - getattr(
+                    __import__("app.core.monitoring", fromlist=["_app_start_time"]),
+                    "_app_start_time",
+                    __import__("time").time(),
+                ),
+                1,
+            )
+        ),
         "databases": db_status,
+        "redis": redis_status,
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
+@app.get("/health/live", tags=["Monitoring"])
+async def liveness_check():
+    """Kubernetes Liveness Probe"""
+    return {"status": "alive"}
+
+
+@app.get("/health/ready", tags=["Monitoring"])
+async def readiness_check():
+    """Kubernetes Readiness Probe"""
+    db_status = await check_database_connection()
+    all_ok = all(v == "connected" for v in db_status.values())
+    if not all_ok:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not ready", "databases": db_status},
+        )
+    return {"status": "ready"}
+
+
+# ============================================================
+# 根路径
+# ============================================================
 @app.get("/", tags=["Root"])
 async def root():
     """API 根路径"""
     return {
         "app": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "docs": "/api/docs",
+        "environment": settings.APP_ENV,
+        "docs": "/api/docs" if settings.should_show_docs else None,
         "health": "/health",
+        "metrics": "/metrics",
     }

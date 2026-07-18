@@ -10,7 +10,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,6 +42,11 @@ class RiskRule(Base, UUIDMixin, TimestampMixin):
         Text, nullable=False, comment="规则参数 (JSON)"
     )
     is_enabled: Mapped[bool] = mapped_column(default=True, nullable=False)
+
+    __table_args__ = (
+        Index("idx_risk_rules_user_scope", "user_id", "scope", "is_enabled"),
+        Index("idx_risk_rules_strategy_type", "strategy_id", "rule_type"),
+    )
 
 
 class RiskEvent(Base, UUIDMixin):
@@ -76,6 +81,12 @@ class RiskEvent(Base, UUIDMixin):
         DateTime(timezone=True), server_default="now()", nullable=False, index=True
     )
 
+    __table_args__ = (
+        Index("idx_risk_events_user_type_time", "user_id", "event_type", "created_at"),
+        Index("idx_risk_events_user_severity", "user_id", "severity", "created_at"),
+        Index("idx_risk_events_symbol", "symbol", "created_at"),
+    )
+
 
 class CircuitBreaker(Base, UUIDMixin):
     """熔断状态记录 (RISK-010 ~ RISK-011)"""
@@ -99,3 +110,8 @@ class CircuitBreaker(Base, UUIDMixin):
         UUID(as_uuid=True), nullable=True, comment="解除人"
     )
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("idx_circuit_breakers_active", "is_active", "scope"),
+        Index("idx_circuit_breakers_user_active", "user_id", "is_active"),
+    )

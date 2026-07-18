@@ -11,7 +11,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, Numeric, String, Text, Integer, Boolean
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -59,6 +59,11 @@ class ApiKey(Base, UUIDMixin, TimestampMixin):
     user: Mapped["User"] = relationship(back_populates="api_keys")
     trading_accounts: Mapped[list["TradingAccount"]] = relationship(
         back_populates="api_key", lazy="selectin"
+    )
+
+    __table_args__ = (
+        Index("idx_apikeys_user_active", "user_id", "is_active"),
+        Index("idx_apikeys_exchange_active", "exchange", "is_active"),
     )
 
     def __repr__(self) -> str:
@@ -237,6 +242,15 @@ class Order(Base, AuditMixin):
         String(20), nullable=True, comment="保证金模式: cross | isolated"
     )
 
+    __table_args__ = (
+        # P0-003: 复合索引 — 高频查询路径
+        Index("idx_orders_user_status_created", "user_id", "status", "created_at"),
+        Index("idx_orders_user_symbol_created", "user_id", "symbol", "created_at"),
+        Index("idx_orders_strategy_status", "strategy_id", "status"),
+        Index("idx_orders_exchange_status", "exchange", "status"),
+        Index("idx_orders_client_order_id", "client_order_id"),
+    )
+
     def __repr__(self) -> str:
         return f"<Order {self.symbol} {self.side} {self.status}>"
 
@@ -298,3 +312,9 @@ class Position(Base, UUIDMixin, TimestampMixin):
 
     def __repr__(self) -> str:
         return f"<Position {self.symbol} {self.side} x{self.leverage}>"
+
+    __table_args__ = (
+        Index("idx_positions_user_open", "user_id", "is_open"),
+        Index("idx_positions_user_symbol", "user_id", "symbol", "is_open"),
+        Index("idx_positions_exchange_symbol", "exchange", "symbol", "is_open"),
+    )
