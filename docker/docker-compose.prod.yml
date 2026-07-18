@@ -205,17 +205,18 @@ services:
     restart: unless-stopped
 
   # ============================================
-  # Nginx 反向代理
+  # 前端 + Nginx (统一入口)
+  # 构建: docker compose -f docker/docker-compose.prod.yml build frontend
   # ============================================
-  nginx:
-    image: nginx:alpine
-    container_name: quant-nginx
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    image: ghcr.io/shoujingzhu-lab/jing-/frontend:latest
+    container_name: quant-frontend
     ports:
       - "80:80"
       - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
     depends_on:
       - backend
     restart: unless-stopped
@@ -224,6 +225,11 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   # ============================================
   # Prometheus 指标收集
