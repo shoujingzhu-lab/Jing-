@@ -3,12 +3,14 @@
 ============
 模块一业务逻辑：多交易所行情获取、聚合、历史数据管理。
 
-缓存策略:
-- Ticker: 2s TTL（WebSocket 每 1s 刷新，REST API 命中缓存 <1ms）
-- Orderbook: 2s TTL
-- Klines: 60s TTL（WebSocket 每 60s 刷新）
-- Funding Rate: 30s TTL（费率每 8h 才变一次）
-- Aggregated: 无独立缓存（复用 ticker 缓存）
+缓存层级（优先级从高到低）:
+1. Redis 缓存 — 多进程共享，重启不丢，30-120s TTL
+2. 本地 TTL 缓存 — 进程内极速，asyncio Lock 保护，30-120s TTL
+3. CCXT 实时 — 穿透境外交易所，~500ms
+
+数据流:
+Broadcaster(1s) → market_data_service.get_ticker() → CCXT → Redis + 本地缓存
+REST API       → market_data_service.get_ticker() → Redis → 本地缓存 → CCXT
 """
 
 import asyncio
@@ -20,6 +22,7 @@ from typing import Optional
 
 from app.adapters.exchanges import create_adapter
 from app.adapters.base import BaseExchangeAdapter
+from app.services.redis_cache import redis_cache as _redis
 
 logger = logging.getLogger("quant.market_data")
 
@@ -64,13 +67,13 @@ class MarketDataService:
     # Binance/Bybit 当前被地理封锁，排除以避免超时
 
     # TTL 配置（秒）
-    # ticker/orderbook: 5s — 足够覆盖聚合请求耗时，避免缓存穿透
-    # klines: 60s — WebSocket 每 60s 刷新
-    # funding_rate: 300s — 费率每 8h 才变
-    TTL_TICKER = 5.0
-    TTL_ORDERBOOK = 5.0
-    TTL_KLINES = 60.0
-    TTL_FUNDING_RATE = 300.0
+    # ticker/orderbook: 60s — 广播器每 1s 刷新，重启后 Redis 存活
+    # klines: 300s — 广播器每 60s 刷新，长 TTL 保证重启命中
+    # funding_rate: 600s — 费率每 8h 才变
+    TTL_TICKER = 60.0
+    TTL_ORDERBOOK = 60.0
+    TTL_KLINES = 300.0
+    TTL_FUNDING_RATE = 600.0
 
     def __init__(self):
         self._adapters: dict[str, BaseExchangeAdapter] = {}
@@ -93,54 +96,105 @@ class MarketDataService:
     # ---- 行情接口（带缓存） ----
 
     async def get_ticker(self, exchange: str, symbol: str) -> dict:
-        """DATA-002: 获取实时 Ticker（TTL 缓存）"""
-        cache_key = self._key("ticker", exchange, symbol)
-        cached = await self._cache.get(cache_key)
+        """DATA-002: 获取实时 Ticker。
+
+        缓存优先级: Redis → 本地 TTL → CCXT 实时
+        """
+        # 1. Redis 缓存（跨进程共享）
+        cached = await _redis.get_ticker(exchange, symbol)
         if cached is not None:
+            # 同步到本地缓存（加速后续同进程内的访问）
+            await self._cache.set(self._key("ticker", exchange, symbol), cached, self.TTL_TICKER)
             return cached
 
+        # 2. 本地 TTL 缓存（进程内极速）
+        cache_key = self._key("ticker", exchange, symbol)
+        local = await self._cache.get(cache_key)
+        if local is not None:
+            return local
+
+        # 3. CCXT 实时（穿透交易所）
         adapter = self._get_adapter(exchange)
         ticker = await adapter.fetch_ticker(symbol)
+
+        # 写入两层缓存
         await self._cache.set(cache_key, ticker, self.TTL_TICKER)
+        await _redis.set_ticker(exchange, symbol, ticker, int(self.TTL_TICKER))
         return ticker
 
     async def get_orderbook(self, exchange: str, symbol: str, depth: int = 20) -> dict:
-        """DATA-002: 获取订单簿（TTL 缓存，按 depth 分别缓存）"""
-        cache_key = self._key("ob", exchange, symbol, str(depth))
-        cached = await self._cache.get(cache_key)
+        """DATA-002: 获取订单簿。
+
+        缓存优先级: Redis → 本地 TTL → CCXT 实时
+        """
+        # 1. Redis
+        cached = await _redis.get_orderbook(exchange, symbol, depth)
         if cached is not None:
+            await self._cache.set(self._key("ob", exchange, symbol, str(depth)), cached, self.TTL_ORDERBOOK)
             return cached
 
+        # 2. 本地 TTL
+        cache_key = self._key("ob", exchange, symbol, str(depth))
+        local = await self._cache.get(cache_key)
+        if local is not None:
+            return local
+
+        # 3. CCXT
         adapter = self._get_adapter(exchange)
         ob = await adapter.fetch_orderbook(symbol, depth)
         await self._cache.set(cache_key, ob, self.TTL_ORDERBOOK)
+        await _redis.set_orderbook(exchange, symbol, depth, ob, int(self.TTL_ORDERBOOK))
         return ob
 
     async def get_klines(
         self, exchange: str, symbol: str, interval: str = "1h",
         limit: int = 500, since: Optional[int] = None,
     ) -> list[dict]:
-        """获取 K 线数据（TTL 缓存，按 interval+limit 分别缓存）"""
-        cache_key = self._key("kline", exchange, symbol, interval, str(limit))
-        cached = await self._cache.get(cache_key)
+        """获取 K 线数据。
+
+        缓存优先级: Redis → 本地 TTL → CCXT 实时
+        """
+        # 1. Redis
+        cached = await _redis.get_klines(exchange, symbol, interval, limit)
         if cached is not None:
+            await self._cache.set(self._key("kline", exchange, symbol, interval, str(limit)), cached, self.TTL_KLINES)
             return cached
 
+        # 2. 本地 TTL
+        cache_key = self._key("kline", exchange, symbol, interval, str(limit))
+        local = await self._cache.get(cache_key)
+        if local is not None:
+            return local
+
+        # 3. CCXT
         adapter = self._get_adapter(exchange)
         klines = await adapter.fetch_klines(symbol, interval, limit, since)
         await self._cache.set(cache_key, klines, self.TTL_KLINES)
+        await _redis.set_klines(exchange, symbol, interval, limit, klines, int(self.TTL_KLINES))
         return klines
 
     async def get_funding_rate(self, exchange: str, symbol: str) -> dict:
-        """DATA-009: 获取资金费率（TTL 缓存）"""
-        cache_key = self._key("fr", exchange, symbol)
-        cached = await self._cache.get(cache_key)
+        """DATA-009: 获取资金费率。
+
+        缓存优先级: Redis → 本地 TTL → CCXT 实时
+        """
+        # 1. Redis
+        cached = await _redis.get_funding_rate(exchange, symbol)
         if cached is not None:
+            await self._cache.set(self._key("fr", exchange, symbol), cached, self.TTL_FUNDING_RATE)
             return cached
 
+        # 2. 本地 TTL
+        cache_key = self._key("fr", exchange, symbol)
+        local = await self._cache.get(cache_key)
+        if local is not None:
+            return local
+
+        # 3. CCXT
         adapter = self._get_adapter(exchange)
         fr = await adapter.fetch_funding_rate(symbol)
         await self._cache.set(cache_key, fr, self.TTL_FUNDING_RATE)
+        await _redis.set_funding_rate(exchange, symbol, fr, int(self.TTL_FUNDING_RATE))
         return fr
 
     # ---- 聚合（复用 ticker 缓存） ----

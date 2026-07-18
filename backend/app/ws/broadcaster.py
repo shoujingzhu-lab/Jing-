@@ -146,25 +146,26 @@ class DataBroadcaster:
             await asyncio.sleep(self._kline_interval)
 
     async def _keep_cache_warm_loop(self):
-        """后台缓存保温 — 定期拉取 Gate.io 常用交易对，让 REST API 始终命中缓存"""
+        """后台缓存保温 — 每 15s 刷新所有常用交易对的缓存，确保 REST API 始终命中"""
         POPULAR = ["BTC/USDT", "ETH/USDT"]
         while self._running:
             try:
                 for symbol in POPULAR:
-                    try:
-                        await asyncio.wait_for(
-                            market_data_service.get_ticker("gateio", symbol),
-                            timeout=30.0,
-                        )
-                        self._exchange_available["gateio"] = True
-                        logger.debug(f"Gate.io cache warm: {symbol}")
-                    except (asyncio.TimeoutError, Exception):
-                        self._exchange_available["gateio"] = False
+                    for exchange in market_data_service.SUPPORTED_EXCHANGES:
+                        try:
+                            timeout = 30.0 if exchange == "gateio" else 5.0
+                            await asyncio.wait_for(
+                                market_data_service.get_ticker(exchange, symbol),
+                                timeout=timeout,
+                            )
+                            self._exchange_available[exchange] = True
+                        except (asyncio.TimeoutError, Exception):
+                            self._exchange_available[exchange] = False
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Cache warm error: {e}")
-            await asyncio.sleep(60)  # Gate.io 慢，60s 一次即可
+            await asyncio.sleep(15)  # 每 15s 刷新一次，缓存 TTL 30s 不会过期
 
     async def _broadcast_status_loop(self):
         """每 30 秒广播一次交易所连接状态给所有已连接的行情客户端"""
