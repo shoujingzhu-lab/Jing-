@@ -14,7 +14,7 @@ const client: AxiosInstance = axios.create({
 // 请求拦截器：自动附加 Token + 记录开始时间
 client.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(CONFIG.TOKEN_KEY);
+    const token = localStorage.getItem(CONFIG.TOKEN_KEY) || sessionStorage.getItem(CONFIG.TOKEN_KEY);
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -63,9 +63,14 @@ client.interceptors.response.use(
       if (data.success === false || (data.code != null && data.code >= 400)) {
         return Promise.reject(new Error(data.message || '请求失败'));
       }
-      // 自动解包：后端返回 { success: true, data: {...} } → 将 inner data 提取到 response.data
+      // 自动解包 + 同步服务器时间
       if (data.success && data.data !== undefined) {
+        const ts = data.timestamp;
         response.data = data.data;
+        if (ts) {
+          (response.data as Record<string, unknown>)._serverTime = ts;
+          useAppStore.getState().setCurrentUtcTime(ts as string);
+        }
       }
     }
     return response;
@@ -76,7 +81,13 @@ client.interceptors.response.use(
 
     // 401 — 尝试刷新 Token
     if (error.response?.status === 401 && !originalRequest._retry) {
-      const refreshToken = localStorage.getItem(CONFIG.REFRESH_TOKEN_KEY);
+      // 同时检查 localStorage 和 sessionStorage
+      let refreshToken = localStorage.getItem(CONFIG.REFRESH_TOKEN_KEY);
+      let tokenStorage: 'local' | 'session' = 'local';
+      if (!refreshToken) {
+        refreshToken = sessionStorage.getItem(CONFIG.REFRESH_TOKEN_KEY);
+        tokenStorage = 'session';
+      }
       if (!refreshToken) {
         // 无 refresh token，直接跳转登录
         clearAuthAndRedirect();
@@ -105,9 +116,10 @@ client.interceptors.response.use(
         );
         const { accessToken, refreshToken: newRefreshToken, expiresIn } = res.data.data;
 
-        localStorage.setItem(CONFIG.TOKEN_KEY, accessToken);
-        localStorage.setItem(CONFIG.REFRESH_TOKEN_KEY, newRefreshToken);
-        localStorage.setItem(CONFIG.TOKEN_EXPIRY_KEY, String(Date.now() + expiresIn * 1000));
+        const storage = tokenStorage === 'session' ? sessionStorage : localStorage;
+        storage.setItem(CONFIG.TOKEN_KEY, accessToken);
+        storage.setItem(CONFIG.REFRESH_TOKEN_KEY, newRefreshToken);
+        storage.setItem(CONFIG.TOKEN_EXPIRY_KEY, String(Date.now() + expiresIn * 1000));
 
         // 处理队列中的请求
         refreshQueue.forEach((q) => q.resolve(accessToken));
@@ -149,9 +161,12 @@ client.interceptors.response.use(
 );
 
 function clearAuthAndRedirect(): void {
-  localStorage.removeItem(CONFIG.TOKEN_KEY);
-  localStorage.removeItem(CONFIG.REFRESH_TOKEN_KEY);
-  localStorage.removeItem(CONFIG.TOKEN_EXPIRY_KEY);
+  const storages = [localStorage, sessionStorage];
+  storages.forEach((s) => {
+    s.removeItem(CONFIG.TOKEN_KEY);
+    s.removeItem(CONFIG.REFRESH_TOKEN_KEY);
+    s.removeItem(CONFIG.TOKEN_EXPIRY_KEY);
+  });
   // 仅在前端路由下跳转，避免服务端重定向
   if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
     window.location.href = '/login';
