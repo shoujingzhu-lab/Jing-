@@ -124,6 +124,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await data_broadcaster.start()
     logger.info("WebSocket broadcaster started")
 
+    # 预热行情缓存（减少前端首次请求延迟）
+    from app.services.market_data import market_data_service
+    await market_data_service.warmup(["BTC/USDT", "ETH/USDT"])
+    logger.info("Market data cache warmed up")
+
     yield
 
     # ---- 关闭 ----

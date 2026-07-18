@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # --- 后台任务 ---
     BACKGROUND_TASK_MAX_WORKERS: int = 4
 
+    # --- HTTP 代理（CCXT 连接境外交易所） ---
+    HTTP_PROXY: Optional[str] = "http://127.0.0.1:7897"
+    HTTPS_PROXY: Optional[str] = "http://127.0.0.1:7897"
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"

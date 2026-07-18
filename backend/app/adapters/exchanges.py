@@ -2,6 +2,7 @@
 交易所适配器实现
 ================
 基于 CCXT 统一接口层，封装 Binance / OKX / Bybit / Gate.io。
+所有 CCXT 实例通过 HTTP_PROXY 连接境外交易所。
 """
 
 import asyncio
@@ -10,6 +11,28 @@ from typing import Optional
 import ccxt.async_support as ccxt
 
 from app.adapters.base import BaseExchangeAdapter
+from app.core.config import settings
+
+
+def _ccxt_proxies() -> dict:
+    """构建 CCXT proxies 配置"""
+    proxies = {}
+    if settings.HTTP_PROXY:
+        proxies["http"] = settings.HTTP_PROXY
+    if settings.HTTPS_PROXY:
+        proxies["https"] = settings.HTTPS_PROXY
+    return proxies
+
+
+def _ccxt_config(extra: Optional[dict] = None) -> dict:
+    """构建带代理的 CCXT 配置"""
+    config = {"enableRateLimit": True}
+    proxies = _ccxt_proxies()
+    if proxies:
+        config["proxies"] = proxies
+    if extra:
+        config.update(extra)
+    return config
 
 
 class BinanceAdapter(BaseExchangeAdapter):
@@ -25,32 +48,18 @@ class BinanceAdapter(BaseExchangeAdapter):
 
     async def _get_spot(self) -> ccxt.binance:
         if self._spot is None:
-            self._spot = ccxt.binance({
-                "apiKey": self.api_key,
-                "secret": self.secret,
-                "enableRateLimit": True,
-                "options": {"defaultType": "spot"},
-            } if not self.testnet else {
-                "apiKey": self.api_key,
-                "secret": self.secret,
-                "enableRateLimit": True,
-                "urls": {"api": "https://testnet.binance.vision/api"},
-                "options": {"defaultType": "spot"},
-            })
+            config = _ccxt_config({"apiKey": self.api_key, "secret": self.secret, "options": {"defaultType": "spot"}})
+            if self.testnet:
+                config["urls"] = {"api": "https://testnet.binance.vision/api"}
+            self._spot = ccxt.binance(config)
         return self._spot
 
     async def _get_futures(self) -> ccxt.binanceusdm:
         if self._futures is None:
-            self._futures = ccxt.binanceusdm({
-                "apiKey": self.api_key,
-                "secret": self.secret,
-                "enableRateLimit": True,
-            } if not self.testnet else {
-                "apiKey": self.api_key,
-                "secret": self.secret,
-                "enableRateLimit": True,
-                "urls": {"api": "https://testnet.binancefuture.com/fapi"},
-            })
+            config = _ccxt_config({"apiKey": self.api_key, "secret": self.secret})
+            if self.testnet:
+                config["urls"] = {"api": "https://testnet.binancefuture.com/fapi"}
+            self._futures = ccxt.binanceusdm(config)
         return self._futures
 
     async def fetch_ticker(self, symbol: str) -> dict:
@@ -155,12 +164,7 @@ class OKXAdapter(BaseExchangeAdapter):
 
     async def _get(self) -> ccxt.okx:
         if self._ex is None:
-            config = {
-                "apiKey": self.api_key,
-                "secret": self.secret,
-                "password": self.passphrase or "",
-                "enableRateLimit": True,
-            }
+            config = _ccxt_config({"apiKey": self.api_key, "secret": self.secret, "password": self.passphrase or ""})
             if self.testnet:
                 config["urls"] = {"api": "https://www.okx.com/api/v5"}
             self._ex = ccxt.okx(config)
@@ -248,14 +252,10 @@ class BybitAdapter(BaseExchangeAdapter):
 
     async def _get(self) -> ccxt.bybit:
         if self._ex is None:
-            self._ex = ccxt.bybit({
-                "apiKey": self.api_key, "secret": self.secret,
-                "enableRateLimit": True,
-            } if not self.testnet else {
-                "apiKey": self.api_key, "secret": self.secret,
-                "enableRateLimit": True,
-                "urls": {"api": "https://api-testnet.bybit.com"},
-            })
+            config = _ccxt_config({"apiKey": self.api_key, "secret": self.secret})
+            if self.testnet:
+                config["urls"] = {"api": "https://api-testnet.bybit.com"}
+            self._ex = ccxt.bybit(config)
         return self._ex
 
     async def fetch_ticker(self, symbol: str) -> dict:
@@ -337,7 +337,7 @@ class GateIOAdapter(BaseExchangeAdapter):
 
     async def _get(self) -> ccxt.gate:
         if self._ex is None:
-            self._ex = ccxt.gate({"apiKey": self.api_key, "secret": self.secret, "enableRateLimit": True})
+            self._ex = ccxt.gate(_ccxt_config({"apiKey": self.api_key, "secret": self.secret}))
         return self._ex
 
     async def fetch_ticker(self, symbol: str) -> dict:
