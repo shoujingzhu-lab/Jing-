@@ -87,5 +87,26 @@ class BaseExchangeAdapter(ABC):
 
     @staticmethod
     def normalize_symbol(symbol: str) -> str:
-        """标准化交易对格式（CCXT 格式）"""
-        return symbol.replace("-", "/").replace("_", "/")
+        """标准化交易对格式（CCXT 格式：BTC/USDT）
+
+        支持输入: BTC/USDT, BTC-USDT, BTC_USDT, BTCUSDT
+        """
+        # 已有 CCXT 斜杠格式
+        if "/" in symbol:
+            return symbol
+        # 用 - 或 _ 分隔
+        if "-" in symbol or "_" in symbol:
+            return symbol.replace("-", "/").replace("_", "/")
+        # 无分隔符格式: 按常见计价货币自动分割
+        common_quotes = ["USDT", "USDC", "USD", "BTC", "ETH", "BNB",
+                        "BUSD", "TUSD", "DAI", "UST", "TRY", "EUR",
+                        "JPY", "GBP", "AUD", "RUB", "UAH", "NGN",
+                        "IDRT", "ZAR", "BRL", "ARS", "COP"]
+        symbol_upper = symbol.upper()
+        for quote in common_quotes:
+            if symbol_upper.endswith(quote) and len(symbol_upper) > len(quote):
+                base = symbol[:-len(quote)]
+                return f"{base}/{quote}"
+        # 回退：在中间位置插入 /
+        mid = len(symbol) // 2
+        return f"{symbol[:mid]}/{symbol[mid:]}"

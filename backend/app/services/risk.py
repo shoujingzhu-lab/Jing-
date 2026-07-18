@@ -117,6 +117,20 @@ class RiskService:
                 detail=json.dumps({"order": order, "reason": reason}),
                 severity="warning",
             )
+            # 推送风控拒绝 WebSocket 事件
+            try:
+                from app.ws.event_emitter import emit_risk_event
+                await emit_risk_event(
+                    self.user_id,
+                    {
+                        "event_type": "pre_trade_rejected",
+                        "detail": {"order": order, "reason": reason},
+                        "severity": "warning",
+                        "strategy_id": strategy_id,
+                    },
+                )
+            except Exception:
+                pass
 
         return passed, reason
 
@@ -281,10 +295,26 @@ class RiskService:
         reason: str = "",
     ):
         """触发熔断器"""
-        await self.breaker_repo.create(
+        breaker = await self.breaker_repo.create(
             user_id=self.user_id,
             scope=scope,
             strategy_id=strategy_id,
             trigger_reason=reason,
             is_active=True,
         )
+        # 推送熔断 WebSocket 事件
+        try:
+            from app.ws.event_emitter import emit_risk_event
+            await emit_risk_event(
+                self.user_id,
+                {
+                    "event_type": "circuit_breaker_triggered",
+                    "scope": scope,
+                    "strategy_id": strategy_id,
+                    "reason": reason,
+                    "severity": "critical",
+                },
+            )
+        except Exception:
+            pass
+        return breaker

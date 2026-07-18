@@ -107,6 +107,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log_fn = logger.info if status == "connected" else logger.error
         log_fn(f"Database [{db_name}]: {status}")
 
+    # 播种策略模板（首次启动时写入 15 个系统模板到数据库）
+    if db_status.get("main") == "connected":
+        try:
+            from app.services.template_seeder import seed_templates
+            from app.core.database import main_async_session
+
+            async with main_async_session() as session:
+                count = await seed_templates(session)
+                if count > 0:
+                    logger.info(f"Seeded {count} strategy templates")
+        except Exception as e:
+            logger.warning(f"Template seeding skipped: {e}")
+
     # 启动 WebSocket 数据广播器
     await data_broadcaster.start()
     logger.info("WebSocket broadcaster started")

@@ -118,7 +118,6 @@ class NotificationService:
         external = [c for c in channel_list if c != "in_app"]
         if external:
             from app.notification.dispatcher import notification_dispatcher
-            from app.ws.manager import ws_manager
 
             # 外部渠道推送
             await notification_dispatcher.dispatch(
@@ -129,9 +128,18 @@ class NotificationService:
                 severity=severity,
             )
 
-            # WebSocket 实时推送
-            await ws_manager.send_to_user(
+        # 3. WebSocket 实时推送（所有通知都推送，不只是外部渠道的）
+        try:
+            from app.ws.event_emitter import emit_notification
+            await emit_notification(
                 self.user_id,
-                {"title": title, "body": body, "category": category, "severity": severity},
-                event_type="notification",
+                {
+                    "title": title,
+                    "body": body,
+                    "category": category,
+                    "severity": severity,
+                    "channels": channel_list,
+                },
             )
+        except Exception:
+            pass

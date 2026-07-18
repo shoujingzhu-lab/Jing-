@@ -150,6 +150,28 @@ class OrderExecutor:
             f"Order submitted: {order.symbol} {order.side} {order.order_type} "
             f"amount={order.amount} → exchange_id={exchange_order_id}"
         )
+
+        # 推送 WebSocket 事件
+        try:
+            from app.ws.event_emitter import emit_order_update
+            await emit_order_update(
+                str(order.user_id),
+                {
+                    "id": str(order.id),
+                    "exchange": order.exchange,
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "order_type": order.order_type,
+                    "amount": float(order.amount),
+                    "price": float(order.price) if order.price else None,
+                    "status": order.status,
+                    "exchange_order_id": exchange_order_id,
+                    "client_order_id": order.client_order_id,
+                },
+            )
+        except Exception:
+            pass  # WebSocket 事件失败不影响核心交易
+
         return order
 
     async def _submit_with_retry(

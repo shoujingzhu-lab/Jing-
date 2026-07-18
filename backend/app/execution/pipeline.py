@@ -119,6 +119,25 @@ class TradingPipeline:
                 client_order_id,
             )
             logger.warning(f"Risk check REJECTED: {reason}")
+
+            # 推送风控拒绝事件到 WebSocket
+            try:
+                from app.ws.event_emitter import emit_risk_event
+                await emit_risk_event(
+                    self.user_id,
+                    {
+                        "event_type": "pre_trade_rejected",
+                        "symbol": symbol,
+                        "side": side,
+                        "amount": amount,
+                        "reason": reason,
+                        "strategy_id": strategy_id,
+                        "severity": "warning",
+                    },
+                )
+            except Exception:
+                pass
+
             raise OrderExecutionError(f"风控拒绝: {reason}")
 
         # ---- Step 3: 创建订单记录 ----
@@ -146,6 +165,27 @@ class TradingPipeline:
             f"{symbol} {side} {order_type} amount={amount} "
             f"order_id={order.id} client_order_id={client_order_id}"
         )
+
+        # 推送订单创建事件到 WebSocket
+        try:
+            from app.ws.event_emitter import emit_order_update
+            await emit_order_update(
+                self.user_id,
+                {
+                    "id": str(order.id),
+                    "symbol": order.symbol,
+                    "side": order.side,
+                    "order_type": order.order_type,
+                    "amount": float(order.amount),
+                    "price": float(order.price) if order.price else None,
+                    "status": order.status,
+                    "strategy_id": strategy_id,
+                    "client_order_id": client_order_id,
+                },
+            )
+        except Exception:
+            pass
+
         return order
 
     async def _create_order(

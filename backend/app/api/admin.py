@@ -24,11 +24,37 @@ router = APIRouter()
 )
 async def system_health():
     db_status = await check_database_connection()
+
+    # Redis 健康检查
+    redis_status = "unknown"
+    try:
+        import redis.asyncio as aioredis
+        from app.core.config import settings
+
+        r = aioredis.from_url(settings.REDIS_URL, socket_timeout=2)
+        await r.ping()
+        await r.close()
+        redis_status = "connected"
+    except Exception:
+        redis_status = "disconnected"
+
+    # WebSocket 状态
+    from app.ws.manager import ws_manager
+    from app.ws.broadcaster import data_broadcaster
+
+    ws_status = {
+        "active_connections": ws_manager.active_connections,
+        "channels": ws_manager.channel_stats,
+        "broadcaster_running": data_broadcaster._running,
+    }
+
     all_ok = all(v == "connected" for v in db_status.values())
+
     return APIResponse(data={
         "status": "healthy" if all_ok else "degraded",
         "services": db_status,
-        "redis": "ok",  # Redis 连接检查
+        "redis": redis_status,
+        "websocket": ws_status,
     })
 
 
@@ -36,14 +62,27 @@ async def system_health():
     "/exchanges/status",
     response_model=APIResponse,
     summary="交易所连接状态",
-    description="ADMIN-002: 查看各交易所的 API 延迟和连接状态。",
+    description="ADMIN-002: 查看各交易所的 API 连接状态（实时检测）。",
 )
 async def exchange_connections(user_id: str = Depends(get_current_user_id)):
+    from app.ws.broadcaster import data_broadcaster
+    from datetime import datetime, UTC
+
+    exchange_status = data_broadcaster.exchange_status
+
+    # 如果 broadcaster 还没采集到任何数据，主动探测
+    if not exchange_status:
+        from app.services.market_data import market_data_service
+        for ex in ["binance", "okx", "bybit", "gateio"]:
+            try:
+                await market_data_service.get_ticker(ex, "BTCUSDT")
+                exchange_status[ex] = "connected"
+            except Exception:
+                exchange_status[ex] = "disconnected"
+
     return APIResponse(data={
-        "binance": {"api_latency_ms": 85, "ws": "connected"},
-        "okx": {"api_latency_ms": 120, "ws": "connected"},
-        "bybit": {"api_latency_ms": 95, "ws": "connected"},
-        "gateio": {"api_latency_ms": 150, "ws": "connected"},
+        "exchanges": exchange_status,
+        "timestamp": datetime.now(UTC).isoformat(),
     })
 
 
