@@ -1,67 +1,70 @@
 @echo off
-chcp 65001 >nul
 REM ============================================
-REM 量化交易系统后端 — 一键启动 (Windows)
+REM Quant Trading System - Backend Quick Start
 REM ============================================
 
 setlocal enabledelayedexpansion
 
-set "BACKEND_DIR=%~dp0backend"
+set "ROOT=%~dp0"
+set "BACKEND=%ROOT%backend"
 
 echo ============================================
-echo   量化交易系统 — 后端启动
+echo   Quant Backend Launcher
 echo ============================================
 
-REM 1. 检查 Python
+REM 1. Check Python
 where python >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [X] 未找到 Python，请先安装 Python 3.11+
+    echo [FAIL] Python not found. Install Python 3.11+
     pause
     exit /b 1
 )
-for /f "tokens=*" %%i in ('python --version') do echo [OK] %%i
+python --version
+echo.
 
-REM 2. 进入后端目录
-cd /d "%BACKEND_DIR%"
+REM 2. Go to backend dir
+cd /d "%BACKEND%"
 if %errorlevel% neq 0 (
-    echo [X] 无法进入 backend 目录
+    echo [FAIL] Cannot enter: %BACKEND%
     pause
     exit /b 1
 )
+echo [OK] Working dir: %CD%
+echo.
 
-REM 3. 检查 .env 文件
+REM 3. Check .env
 if not exist ".env" (
-    echo [!] .env 文件不存在，从 .env.example 复制...
     if exist ".env.example" (
-        copy .env.example .env >nul
-        echo [OK] 已创建 .env，请编辑配置数据库连接
+        echo [!] Creating .env from .env.example ...
+        copy ".env.example" ".env" >nul
+        echo [OK] .env created. Edit it for your DB settings.
     ) else (
-        echo [X] 没有 .env.example，请手动创建 .env
+        echo [!] No .env file found, using defaults
     )
+) else (
+    echo [OK] .env exists
 )
 
-REM 4. 检查依赖
+REM 4. Check dependencies
 pip show fastapi >nul 2>&1
 if %errorlevel% neq 0 (
-    echo.
-    echo [>] 依赖未安装，正在安装...
+    echo [!] Installing dependencies...
     pip install -r requirements.txt
     if %errorlevel% neq 0 (
-        echo [X] 依赖安装失败
+        echo [FAIL] pip install failed
         pause
         exit /b 1
     )
-    echo [OK] 依赖安装完成
-) else (
-    echo [OK] 依赖已安装
 )
-
-REM 5. 启动后端
+echo [OK] Dependencies ready
 echo.
-echo [>] 启动 FastAPI 服务...
-echo     API 文档: http://localhost:8000/api/docs
-echo     健康检查: http://localhost:8000/health
-echo     按 Ctrl+C 停止
+
+REM 5. Start server
+echo ============================================
+echo   Starting FastAPI on http://localhost:8000
+echo   API Docs: http://localhost:8000/api/docs
+echo   Health:   http://localhost:8000/health
+echo   Press Ctrl+C to stop
 echo ============================================
 echo.
 
