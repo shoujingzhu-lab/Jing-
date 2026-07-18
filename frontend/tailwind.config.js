@@ -35,6 +35,13 @@ export default {
         // 交互
         'hover-bg': 'rgba(255,255,255,0.06)',
         'active-bg': 'rgba(255,255,255,0.1)',
+        // Glassmorphism 电光蓝
+        'glass-primary': '#00D4FF',
+        'glass-primary-bg': 'rgba(0, 212, 255, 0.12)',
+        'glass-primary-glow': 'rgba(0, 212, 255, 0.2)',
+        'glass-accent': '#8B5CF6',
+        'glass-accent-bg': 'rgba(139, 92, 246, 0.12)',
+        'glass-border': 'rgba(255, 255, 255, 0.08)',
       },
       fontFamily: {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],

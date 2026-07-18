@@ -11,6 +11,7 @@ import AuthLayout from '@/components/Layout/AuthLayout';
 import { routes, authPaths } from './routes';
 import 'antd/dist/reset.css';
 import '@/styles/index.css';
+import '@/styles/glass.css';
 import '@/i18n';
 
 const queryClient = new QueryClient({

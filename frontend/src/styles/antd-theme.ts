@@ -9,12 +9,12 @@ import { colors, typography, radius, spacing } from '@/tokens';
  */
 export const darkTheme: ThemeConfig = {
   token: {
-    // 品牌色
-    colorPrimary: colors.brand,
-    colorSuccess: colors.success,
-    colorWarning: colors.warning,
-    colorError: colors.error,
-    colorInfo: colors.info,
+    // 品牌色 — Glassmorphism 电光蓝
+    colorPrimary: '#00D4FF',
+    colorSuccess: '#26A69A',
+    colorWarning: '#FF9800',
+    colorError: '#EF5350',
+    colorInfo: '#42A5F5',
 
     // 背景/文字
     colorTextBase: colors.dark.textPrimary,
@@ -35,48 +35,48 @@ export const darkTheme: ThemeConfig = {
   components: {
     Layout: {
       bodyBg: colors.dark.bgPrimary,
-      headerBg: colors.dark.bgSecondary,
-      siderBg: colors.dark.bgSecondary,
+      headerBg: 'rgba(15, 23, 42, 0.7)',
+      siderBg: 'rgba(15, 23, 42, 0.6)',
       triggerBg: colors.dark.bgTertiary,
     },
     Menu: {
-      darkItemBg: colors.dark.bgSecondary,
-      darkSubMenuItemBg: colors.dark.bgTertiary,
-      darkItemSelectedBg: colors.functional.brandBg,
-      darkItemHoverBg: colors.interaction.hover,
+      darkItemBg: 'transparent',
+      darkSubMenuItemBg: 'rgba(15, 23, 42, 0.4)',
+      darkItemSelectedBg: 'rgba(0, 212, 255, 0.15)',
+      darkItemHoverBg: 'rgba(255, 255, 255, 0.06)',
     },
     Card: {
       colorBgContainer: colors.dark.bgSecondary,
     },
     Table: {
-      headerBg: colors.dark.bgTertiary,
-      rowHoverBg: colors.interaction.hover,
-      borderColor: colors.dark.border,
+      headerBg: 'rgba(15, 23, 42, 0.4)',
+      rowHoverBg: 'rgba(0, 212, 255, 0.06)',
+      borderColor: 'rgba(255, 255, 255, 0.06)',
     },
     Input: {
-      colorBgContainer: colors.dark.bgTertiary,
-      activeBorderColor: colors.brand,
+      colorBgContainer: 'rgba(255, 255, 255, 0.04)',
+      activeBorderColor: '#00D4FF',
     },
     InputNumber: {
-      colorBgContainer: colors.dark.bgTertiary,
-      activeBorderColor: colors.brand,
+      colorBgContainer: 'rgba(255, 255, 255, 0.04)',
+      activeBorderColor: '#00D4FF',
     },
     Select: {
       colorBgContainer: colors.dark.bgTertiary,
-      optionSelectedBg: colors.functional.brandBg,
+      optionSelectedBg: 'rgba(0, 212, 255, 0.15)',
     },
     Button: {
-      colorPrimaryBg: colors.brand,
-      primaryShadow: 'none',
+      colorPrimaryBg: '#00D4FF',
+      primaryShadow: '0 0 16px rgba(0, 212, 255, 0.3)',
     },
     Tabs: {
       colorText: colors.dark.textSecondary,
-      inkBarColor: colors.brand,
-      itemSelectedColor: colors.brand,
+      inkBarColor: '#00D4FF',
+      itemSelectedColor: '#00D4FF',
       itemHoverColor: colors.dark.textPrimary,
     },
     Tooltip: {
-      colorBgSpotlight: colors.dark.bgTertiary,
+      colorBgSpotlight: 'rgba(15, 23, 42, 0.95)',
     },
     Dropdown: {
       colorBgElevated: colors.dark.bgSecondary,
@@ -131,8 +131,8 @@ export const darkTheme: ThemeConfig = {
  */
 export const lightTheme: ThemeConfig = {
   token: {
-    // 品牌色（与暗色主题共用）
-    colorPrimary: colors.brand,
+    // 品牌色 — Glassmorphism 电光蓝
+    colorPrimary: '#0098B8',
     colorSuccess: colors.success,
     colorWarning: colors.warning,
     colorError: colors.error,
@@ -188,8 +188,8 @@ export const lightTheme: ThemeConfig = {
       primaryShadow: 'none',
     },
     Tabs: {
-      inkBarColor: colors.brand,
-      itemSelectedColor: colors.brand,
+      inkBarColor: '#0098B8',
+      itemSelectedColor: '#0098B8',
     },
     Tooltip: {
       colorBgSpotlight: colors.dark.bgTertiary,

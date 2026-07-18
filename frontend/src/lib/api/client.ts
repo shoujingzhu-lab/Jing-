@@ -57,7 +57,7 @@ client.interceptors.response.use(
     return response;
   },
   async (error: AxiosError) => {
-    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean; _rateLimitRetry?: number };
     if (!originalRequest) return Promise.reject(error);
 
     // 401 — 尝试刷新 Token
@@ -110,6 +110,18 @@ client.interceptors.response.use(
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
+      }
+    }
+
+    // 429 — 限流，自动重试 (最多3次，指数退避)
+    if (error.response?.status === 429 && !originalRequest._rateLimitRetry) {
+      originalRequest._rateLimitRetry = (originalRequest._rateLimitRetry || 0) + 1;
+      const maxRetries = 3;
+      if (originalRequest._rateLimitRetry <= maxRetries) {
+        const delay = Math.pow(2, originalRequest._rateLimitRetry) * 1000; // 2s, 4s, 8s
+        console.warn(`[RateLimit] 请求被限流，${delay / 1000}s 后重试 (${originalRequest._rateLimitRetry}/${maxRetries})`);
+        await new Promise((r) => setTimeout(r, delay));
+        return client(originalRequest);
       }
     }
 

@@ -4,6 +4,8 @@ import { WarningOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { Typography } from 'antd';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
+import GlassCard from '@/components/ui/GlassCard';
+import GlassButton from '@/components/ui/GlassButton';
 import { useDashboard } from '@/hooks/useDashboard';
 import OverviewCards from '@/features/dashboard/OverviewCards';
 import EquityCurveChart from '@/features/dashboard/EquityCurveChart';
@@ -15,7 +17,6 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const { data, loading, error, refresh } = useDashboard();
 
-  // 静默刷新行情数据（不触发 loading 状态）
   useEffect(() => {
     const timer = setInterval(() => {
       refresh(true);
@@ -23,11 +24,11 @@ export default function DashboardPage() {
     return () => clearInterval(timer);
   }, [refresh]);
 
-  // 新用户引导
+  // 新用户引导 — 玻璃风格
   if (!loading && data && !data.hasStrategies) {
     return (
       <div style={{ textAlign: 'center', paddingTop: 80 }}>
-        <span style={{ fontSize: 64 }}>🚀</span>
+        <span style={{ fontSize: 72, filter: 'drop-shadow(0 0 20px rgba(0, 212, 255, 0.3))' }}>🚀</span>
         <Typography.Title level={3} style={{ color: 'var(--text-primary)', marginTop: 20 }}>
           欢迎使用量化交易系统
         </Typography.Title>
@@ -35,20 +36,12 @@ export default function DashboardPage() {
           你还没有策略，创建第一个策略开始你的量化交易之旅
         </Typography.Paragraph>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-          <button
-            className="ant-btn ant-btn-primary"
-            style={{ height: 40, padding: '0 28px', fontSize: 15 }}
-            onClick={() => navigate('/strategy/visual/new')}
-          >
+          <GlassButton variant="primary" onClick={() => navigate('/strategy/visual/new')}>
             可视化策略编辑器
-          </button>
-          <button
-            className="ant-btn ant-btn-default"
-            style={{ height: 40, padding: '0 28px', fontSize: 15 }}
-            onClick={() => navigate('/strategy/code/new')}
-          >
+          </GlassButton>
+          <GlassButton variant="secondary" onClick={() => navigate('/strategy/code/new')}>
             代码策略编辑器
-          </button>
+          </GlassButton>
         </div>
       </div>
     );
@@ -60,7 +53,7 @@ export default function DashboardPage() {
         仪表盘
       </Typography.Title>
 
-      {/* 风控告警横幅 */}
+      {/* 风控告警横幅 — 玻璃风格 */}
       <div style={{ marginBottom: 16 }}>
         <Alert
           message="⚠ 风控提示：今日累计亏损已达日内限额的 60%，请注意风险"
@@ -69,37 +62,45 @@ export default function DashboardPage() {
           icon={<WarningOutlined />}
           closable
           style={{
-            background: 'rgba(255,152,0,0.1)',
-            borderColor: 'var(--warning)',
+            background: 'rgba(255,152,0,0.08)',
+            borderColor: 'rgba(255,152,0,0.25)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: 14,
           }}
         />
       </div>
 
       {/* 概览卡片 */}
       <ErrorBoundary>
-        <OverviewCards
-          data={data ? {
-            totalAsset: data.totalAsset,
-            todayPnl: data.todayPnl,
-            todayPnlPercent: data.todayPnlPercent,
-            winRate: data.winRate,
-            activeStrategies: data.activeStrategies,
-          } : undefined}
-          loading={loading}
-          error={error}
-          onRetry={refresh}
-        />
+        <GlassCard variant="elevated" staggerIndex={0}>
+          <div style={{ padding: 4 }}>
+            <OverviewCards
+              data={data ? {
+                totalAsset: data.totalAsset,
+                todayPnl: data.todayPnl,
+                todayPnlPercent: data.todayPnlPercent,
+                winRate: data.winRate,
+                activeStrategies: data.activeStrategies,
+              } : undefined}
+              loading={loading}
+              error={error}
+              onRetry={refresh}
+            />
+          </div>
+        </GlassCard>
       </ErrorBoundary>
 
-      {/* 资产曲线 */}
+      {/* 资产曲线 — 玻璃面板 */}
       <div style={{ marginTop: 16 }}>
         <ErrorBoundary>
-          <EquityCurveChart
-            data={data?.equityCurve}
-            loading={loading}
-            error={null}
-            onRetry={refresh}
-          />
+          <GlassCard variant="panel" staggerIndex={1}>
+            <EquityCurveChart
+              data={data?.equityCurve}
+              loading={loading}
+              error={null}
+              onRetry={refresh}
+            />
+          </GlassCard>
         </ErrorBoundary>
       </div>
 
@@ -107,23 +108,27 @@ export default function DashboardPage() {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} lg={15}>
           <ErrorBoundary>
-            <StrategyStatusTable
-              data={data?.strategies}
-              loading={loading}
-              error={null}
-              onRetry={refresh}
-              onNewStrategy={() => navigate('/strategy/visual/new')}
-            />
+            <GlassCard variant="panel" staggerIndex={2}>
+              <StrategyStatusTable
+                data={data?.strategies}
+                loading={loading}
+                error={null}
+                onRetry={refresh}
+                onNewStrategy={() => navigate('/strategy/visual/new')}
+              />
+            </GlassCard>
           </ErrorBoundary>
         </Col>
         <Col xs={24} lg={9}>
           <ErrorBoundary>
-            <RecentTrades
-              data={data?.recentTrades}
-              loading={loading}
-              error={null}
-              onRetry={refresh}
-            />
+            <GlassCard variant="panel" staggerIndex={3}>
+              <RecentTrades
+                data={data?.recentTrades}
+                loading={loading}
+                error={null}
+                onRetry={refresh}
+              />
+            </GlassCard>
           </ErrorBoundary>
         </Col>
       </Row>
@@ -131,12 +136,14 @@ export default function DashboardPage() {
       {/* 行情快照 */}
       <div style={{ marginTop: 16 }}>
         <ErrorBoundary>
-          <MarketSnapshot
-            data={data?.marketSnapshot}
-            loading={loading}
-            error={null}
-            onRetry={refresh}
-          />
+          <GlassCard variant="panel" staggerIndex={4}>
+            <MarketSnapshot
+              data={data?.marketSnapshot}
+              loading={loading}
+              error={null}
+              onRetry={refresh}
+            />
+          </GlassCard>
         </ErrorBoundary>
       </div>
     </div>
