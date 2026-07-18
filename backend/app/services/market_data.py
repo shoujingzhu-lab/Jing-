@@ -25,25 +25,28 @@ logger = logging.getLogger("quant.market_data")
 
 
 class _TTLCache:
-    """简易异步安全 TTL 缓存"""
+    """简易异步安全 TTL 缓存（asyncio Lock 保护）"""
 
     def __init__(self):
         self._store: dict[str, tuple[float, any]] = {}
+        self._lock = asyncio.Lock()
 
-    def get(self, key: str) -> Optional[any]:
+    async def get(self, key: str) -> Optional[any]:
         """读取缓存，过期返回 None"""
-        entry = self._store.get(key)
-        if entry is None:
-            return None
-        expires_at, value = entry
-        if time.monotonic() > expires_at:
-            del self._store[key]
-            return None
-        return value
+        async with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            expires_at, value = entry
+            if time.monotonic() > expires_at:
+                del self._store[key]
+                return None
+            return value
 
-    def set(self, key: str, value: any, ttl: float):
+    async def set(self, key: str, value: any, ttl: float):
         """写入缓存"""
-        self._store[key] = (time.monotonic() + ttl, value)
+        async with self._lock:
+            self._store[key] = (time.monotonic() + ttl, value)
 
     def stats(self) -> dict:
         """缓存统计"""
@@ -92,25 +95,25 @@ class MarketDataService:
     async def get_ticker(self, exchange: str, symbol: str) -> dict:
         """DATA-002: 获取实时 Ticker（TTL 缓存）"""
         cache_key = self._key("ticker", exchange, symbol)
-        cached = self._cache.get(cache_key)
+        cached = await self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         adapter = self._get_adapter(exchange)
         ticker = await adapter.fetch_ticker(symbol)
-        self._cache.set(cache_key, ticker, self.TTL_TICKER)
+        await self._cache.set(cache_key, ticker, self.TTL_TICKER)
         return ticker
 
     async def get_orderbook(self, exchange: str, symbol: str, depth: int = 20) -> dict:
         """DATA-002: 获取订单簿（TTL 缓存，按 depth 分别缓存）"""
         cache_key = self._key("ob", exchange, symbol, str(depth))
-        cached = self._cache.get(cache_key)
+        cached = await self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         adapter = self._get_adapter(exchange)
         ob = await adapter.fetch_orderbook(symbol, depth)
-        self._cache.set(cache_key, ob, self.TTL_ORDERBOOK)
+        await self._cache.set(cache_key, ob, self.TTL_ORDERBOOK)
         return ob
 
     async def get_klines(
@@ -119,25 +122,25 @@ class MarketDataService:
     ) -> list[dict]:
         """获取 K 线数据（TTL 缓存，按 interval+limit 分别缓存）"""
         cache_key = self._key("kline", exchange, symbol, interval, str(limit))
-        cached = self._cache.get(cache_key)
+        cached = await self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         adapter = self._get_adapter(exchange)
         klines = await adapter.fetch_klines(symbol, interval, limit, since)
-        self._cache.set(cache_key, klines, self.TTL_KLINES)
+        await self._cache.set(cache_key, klines, self.TTL_KLINES)
         return klines
 
     async def get_funding_rate(self, exchange: str, symbol: str) -> dict:
         """DATA-009: 获取资金费率（TTL 缓存）"""
         cache_key = self._key("fr", exchange, symbol)
-        cached = self._cache.get(cache_key)
+        cached = await self._cache.get(cache_key)
         if cached is not None:
             return cached
 
         adapter = self._get_adapter(exchange)
         fr = await adapter.fetch_funding_rate(symbol)
-        self._cache.set(cache_key, fr, self.TTL_FUNDING_RATE)
+        await self._cache.set(cache_key, fr, self.TTL_FUNDING_RATE)
         return fr
 
     # ---- 聚合（复用 ticker 缓存） ----
@@ -147,17 +150,31 @@ class MarketDataService:
 
         同时获取多个交易所的报价，找出最优买卖价和跨所价差。
         聚合结果不单独缓存 — 各交易所 ticker 已有独立 TTL 缓存。
+
+        超时策略: 总等待时间不超过 3s，防止慢交易所阻塞整体响应。
         """
-        tasks = []
+        # 按交易所名创建 task 映射
+        task_map = {}
         for exchange in self.SUPPORTED_EXCHANGES:
-            tasks.append(self._safe_fetch(exchange, symbol))
+            task_map[exchange] = asyncio.ensure_future(
+                self._safe_fetch(exchange, symbol)
+            )
 
-        results = await asyncio.gather(*tasks)
+        # asyncio.wait: 有结果就收，不等慢的
+        done, pending = await asyncio.wait(
+            task_map.values(),
+            timeout=3.0,
+        )
+        for p in pending:
+            p.cancel()
 
+        # 按交易所名收集结果
         tickers = {}
-        for exchange, result in zip(self.SUPPORTED_EXCHANGES, results):
-            if result is not None:
-                tickers[exchange] = result
+        for exchange, task in task_map.items():
+            if task in done and not task.cancelled() and task.exception() is None:
+                result = task.result()
+                if result is not None:
+                    tickers[exchange] = result
 
         if not tickers:
             return {"symbol": symbol, "exchanges": {}, "error": "所有交易所均获取失败"}
@@ -240,11 +257,27 @@ class MarketDataService:
         return all_bars
 
     async def _safe_fetch(self, exchange: str, symbol: str) -> Optional[dict]:
-        """安全获取行情（单交易所失败不影响整体，5s 超时保护）"""
+        """缓存优先获取行情（不阻塞，单交易所失败不影响整体）。
+
+        - 缓存命中 → 即时返回
+        - 缓存未命中且交易所是 OKX → 实时拉取（3s 超时）
+        - 缓存未命中且交易所是 Gate.io → 直接返回 None（不阻塞，等 WS 后台刷新）
+        """
+        cache_key = self._key("ticker", exchange, symbol)
+        cached = await self._cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # Gate.io 走代理极慢（20-30s），不在 REST 请求中实时拉取
+        # WebSocket 广播器在后台 1s 轮询，会自动填充缓存
+        if exchange == "gateio":
+            return None
+
+        # OKX 可以实时拉取（~0.6s）
         try:
             return await asyncio.wait_for(
                 self.get_ticker(exchange, symbol),
-                timeout=5.0,
+                timeout=3.0,
             )
         except (asyncio.TimeoutError, Exception):
             return None

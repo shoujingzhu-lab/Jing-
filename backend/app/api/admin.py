@@ -62,20 +62,24 @@ async def system_health():
     "/exchanges/status",
     response_model=APIResponse,
     summary="交易所连接状态",
-    description="ADMIN-002: 查看各交易所的 API 连接状态（实时检测）。",
+    description="ADMIN-002: 查看各交易所的 API 连接状态（使用缓存 + 按需探测）。",
 )
 async def exchange_connections(user_id: str = Depends(get_current_user_id)):
+    import asyncio
     from app.ws.broadcaster import data_broadcaster
     from datetime import datetime, UTC
+    from app.services.market_data import market_data_service
 
-    exchange_status = data_broadcaster.exchange_status
+    exchange_status = dict(data_broadcaster.exchange_status)
 
-    # 如果 broadcaster 还没采集到任何数据，主动探测
-    if not exchange_status:
-        from app.services.market_data import market_data_service
-        for ex in ["binance", "okx", "bybit", "gateio"]:
+    # 对缺失状态的交易所主动探测（仅可用交易所，3s 超时）
+    for ex in market_data_service.SUPPORTED_EXCHANGES:
+        if ex not in exchange_status:
             try:
-                await market_data_service.get_ticker(ex, "BTCUSDT")
+                await asyncio.wait_for(
+                    market_data_service.get_ticker(ex, "BTC/USDT"),
+                    timeout=3.0,
+                )
                 exchange_status[ex] = "connected"
             except Exception:
                 exchange_status[ex] = "disconnected"
