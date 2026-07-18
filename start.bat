@@ -1,68 +1,78 @@
 @echo off
 chcp 65001 >nul
 REM ============================================
-REM 量化程序前端 — 一键启动脚本 (Windows)
-REM 项目: Vite + React + TypeScript
-REM 端口: 3000
+REM 量化交易系统 — 一键启动 (Windows)
+REM 后端: FastAPI :8000
+REM 前端: Vite :3000
 REM ============================================
 
 setlocal enabledelayedexpansion
 
+echo ============================================
+echo   量化交易系统 — 启动菜单
+echo ============================================
+echo.
+echo   [1] 启动后端 (FastAPI  :8000)
+echo   [2] 启动前端 (Vite     :3000)
+echo   [3] 启动全部 (后端 + 前端)
+echo   [0] 退出
+echo.
+set /p CHOICE="请选择 [0-3]: "
+
+if "%CHOICE%"=="0" exit /b 0
+if "%CHOICE%"=="1" goto start_backend
+if "%CHOICE%"=="2" goto start_frontend
+if "%CHOICE%"=="3" goto start_all
+echo 无效选择
+pause
+exit /b 1
+
+:start_backend
+echo.
+echo ============================================
+echo   启动后端...
+echo ============================================
+call "%~dp0start_backend.bat"
+goto :eof
+
+:start_frontend
+echo.
+echo ============================================
+echo   启动前端...
+echo ============================================
+call :run_frontend
+goto :eof
+
+:start_all
+echo.
+echo ============================================
+echo   启动全部服务...
+echo ============================================
+echo [!] 后端将在新窗口启动
+start "量化-后端" cmd /c "%~dp0start_backend.bat"
+timeout /t 3 >nul
+echo [>] 启动前端...
+call :run_frontend
+goto :eof
+
+:run_frontend
 set "FRONTEND_DIR=%~dp0frontend"
 
-echo ============================================
-echo   量化程序前端 — 启动脚本
-echo ============================================
+where node >nul 2>&1 || (echo [X] 未找到 Node.js && pause && exit /b 1)
+echo [OK] Node.js
 
-REM 1. 检查 Node.js
-where node >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ❌ 未找到 Node.js，请先安装 Node.js ^(>=18^)
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%i in ('node -v') do echo ✅ Node.js %%i
+cd /d "%FRONTEND_DIR%" || (echo [X] 无法进入 frontend 目录 && pause && exit /b 1)
 
-REM 2. 检查 npm
-where npm >nul 2>&1
-if %errorlevel% neq 0 (
-    echo ❌ 未找到 npm
-    pause
-    exit /b 1
-)
-for /f "tokens=*" %%i in ('npm -v') do echo ✅ npm %%i
-
-REM 3. 进入前端目录
-cd /d "%FRONTEND_DIR%"
-if %errorlevel% neq 0 (
-    echo ❌ 无法进入 frontend 目录: %FRONTEND_DIR%
-    pause
-    exit /b 1
-)
-
-REM 4. 检查并安装依赖
 if not exist "node_modules\" (
-    echo.
-    echo 📦 node_modules 不存在，正在安装依赖...
-    call npm install
-    if %errorlevel% neq 0 (
-        echo ❌ 依赖安装失败
-        pause
-        exit /b 1
-    )
-    echo ✅ 依赖安装完成
+    echo [>] 安装前端依赖...
+    call npm install || (echo [X] 安装失败 && pause && exit /b 1)
 ) else (
-    echo ✅ node_modules 已存在，跳过安装
+    echo [OK] node_modules 已存在
 )
 
-REM 5. 启动开发服务器
-echo.
-echo 🚀 启动 Vite 开发服务器...
-echo    本地访问: http://localhost:3000/
-echo    按 Ctrl+C 停止服务
+echo [>] 启动 Vite...
+echo    前端: http://localhost:3000/
+echo    按 Ctrl+C 停止
 echo ============================================
-echo.
-
 call npx vite --host
-
-pause
+goto :eof
