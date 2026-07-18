@@ -74,7 +74,7 @@ export function useMarketOverview() {
 
 // ========== useSymbolDetail ==========
 
-export function useSymbolDetail(symbol: string) {
+export function useSymbolDetail(symbol: string, klineInterval = '1h') {
   const [klines, setKlines] = useState<Kline[]>([]);
   const [orderBook, setOrderBook] = useState<OrderBook | null>(null);
   const [trades, setTrades] = useState<TradeTick[]>([]);
@@ -88,7 +88,7 @@ export function useSymbolDetail(symbol: string) {
     setError(null);
     try {
       const [klinesRes, orderbookRes, tickerRes] = await Promise.allSettled([
-        dataApi.getKlines(DEFAULT_EXCHANGE, symbol.replace('/', ''), '1h', 200),
+        dataApi.getKlines(DEFAULT_EXCHANGE, symbol.replace('/', ''), klineInterval, 200),
         dataApi.getOrderBook(DEFAULT_EXCHANGE, symbol.replace('/', '')),
         dataApi.getAggregated(symbol.replace('/', '')),
       ]);
@@ -147,11 +147,58 @@ export function useSymbolDetail(symbol: string) {
     } finally {
       setLoading(false);
     }
-  }, [symbol]);
+  }, [symbol, klineInterval]);
 
   useEffect(() => {
     fetchDetail();
   }, [fetchDetail]);
+
+  // 订单簿+行情每1秒刷新
+  useEffect(() => {
+    if (!symbol) return;
+    const timer = setInterval(async () => {
+      try {
+        const [obRes, tickerRes] = await Promise.allSettled([
+          dataApi.getOrderBook(DEFAULT_EXCHANGE, symbol.replace('/', '')),
+          dataApi.getAggregated(symbol.replace('/', '')),
+        ]);
+        if (obRes.status === 'fulfilled') {
+          const raw = obRes.value.data as unknown as Record<string, unknown>;
+          if (raw) {
+            setOrderBook({
+              symbol,
+              exchange: DEFAULT_EXCHANGE,
+              asks: (raw.asks as Array<[number, number]>)?.map(([price, amount]) => ({ price, amount })) || [],
+              bids: (raw.bids as Array<[number, number]>)?.map(([price, amount]) => ({ price, amount })) || [],
+              timestamp: Date.now(),
+            });
+          }
+        }
+        if (tickerRes.status === 'fulfilled') {
+          const d = tickerRes.value.data as unknown as Record<string, unknown>;
+          if (d) {
+            const exchanges = d.exchanges as Record<string, Record<string, unknown>> | undefined;
+            const firstEx = exchanges ? Object.values(exchanges)[0] : null;
+            if (firstEx) {
+              setTicker({
+                symbol,
+                exchange: DEFAULT_EXCHANGE,
+                lastPrice: (firstEx.last ?? 0) as number,
+                change24h: 0,
+                changePercent24h: (firstEx.change_pct_24h ?? 0) as number,
+                high24h: (firstEx.high_24h ?? 0) as number,
+                low24h: (firstEx.low_24h ?? 0) as number,
+                volume24h: (firstEx.volume_24h ?? 0) as number,
+                quoteVolume24h: (firstEx.quote_volume_24h ?? 0) as number,
+                timestamp: Date.now(),
+              });
+            }
+          }
+        }
+      } catch { /* 静默失败 */ }
+    }, 200);
+    return () => clearInterval(timer);
+  }, [symbol]);
 
   // 实时更新：用聚合数据轮询（OKX/GateIO 在中国可用）
   useEffect(() => {
@@ -173,13 +220,13 @@ export function useSymbolDetail(symbol: string) {
               side: 'buy',
               timestamp: Date.now(),
             };
-            setTrades((prev) => [newTrade, ...prev.slice(0, 29)]);
+            setTrades((prev) => [newTrade, ...prev.slice(0, 49)]);
           }
         }
       } catch {
         // 静默失败
       }
-    }, 3000);
+    }, 1000);
 
     return () => clearInterval(timer);
   }, [symbol]);

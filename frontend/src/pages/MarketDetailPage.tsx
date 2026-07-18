@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Row, Col, Card, Typography, Tag, Button, InputNumber, Select, Tabs } from 'antd';
 import { CaretUpOutlined, CaretDownOutlined } from '@ant-design/icons';
 import { useSymbolDetail } from '@/hooks/useMarketData';
 import KlineChart from '@/features/market/KlineChart';
 import Skeleton from '@/components/ui/Skeleton';
-import BaseChart from '@/components/Chart/BaseChart';
 import { formatRelativeTime, formatCryptoAmount } from '@/lib/utils/format';
+import type { KlinePeriod } from '@/lib/types';
 
 export default function MarketDetailPage() {
   const { symbol = 'BTC/USDT' } = useParams();
-  const { klines, orderBook, trades, ticker, loading } = useSymbolDetail(symbol);
+  const [period, setPeriod] = useState<KlinePeriod>('1h');
+  const { klines, orderBook, trades, ticker, loading } = useSymbolDetail(symbol, period);
 
   // 从真实 ticker 中取数据，加载中用估计值
   const lastPrice = ticker?.lastPrice;
@@ -18,30 +20,8 @@ export default function MarketDetailPage() {
   const low24h = ticker?.low24h ?? lastPrice;
   const volume24h = ticker?.volume24h ?? 0;
 
-  // 订单簿深度图
   const maxBidAmount = orderBook ? Math.max(...orderBook.bids.map((b) => b.amount), 1) : 1;
   const maxAskAmount = orderBook ? Math.max(...orderBook.asks.map((a) => a.amount), 1) : 1;
-
-  const depthOption = {
-    xAxis: { type: 'value' as const, axisLabel: { fontSize: 10, color: '#8B949E' } },
-    yAxis: { type: 'value' as const, axisLabel: { fontSize: 10, color: '#8B949E' } },
-    series: [
-      {
-        type: 'line' as const,
-        data: orderBook?.bids.map((b, i) => [b.price, orderBook.bids.slice(0, i + 1).reduce((s, x) => s + x.amount, 0)]) || [],
-        smooth: true, step: 'end' as const,
-        lineStyle: { color: '#26A69A', width: 2 },
-        areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(38,166,154,0.4)' }, { offset: 1, color: 'rgba(38,166,154,0.05)' }] } },
-      },
-      {
-        type: 'line' as const,
-        data: orderBook?.asks.map((a, i) => [a.price, orderBook.asks.slice(0, i + 1).reduce((s, x) => s + x.amount, 0)]) || [],
-        smooth: true, step: 'start' as const,
-        lineStyle: { color: '#EF5350', width: 2 },
-        areaStyle: { color: { type: 'linear' as const, x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(239,83,80,0.05)' }, { offset: 1, color: 'rgba(239,83,80,0.4)' }] } },
-      },
-    ],
-  };
 
   return (
     <div>
@@ -75,16 +55,13 @@ export default function MarketDetailPage() {
           <Card style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }} styles={{ body: { padding: 12 } }}>
             {loading ? <Skeleton type="chart" /> : (
               klines.length > 0 ? (
-                <KlineChart data={klines} loading={loading} symbol={symbol} />
+                <KlineChart data={klines} loading={loading} symbol={symbol} period={period} onPeriodChange={setPeriod} />
               ) : (
                 <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                   📊 K线数据加载中，请确认所选交易对在 OKX/GateIO 上有数据
                 </div>
               )
             )}
-          </Card>
-          <Card title="订单簿深度图" size="small" style={{ marginTop: 8, background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}>
-            {orderBook ? <BaseChart option={depthOption} height={150} /> : <Skeleton type="chart" />}
           </Card>
         </Col>
 
@@ -121,9 +98,10 @@ export default function MarketDetailPage() {
           </Card>
           {/* 最新成交 */}
           <Card title="最新成交" size="small" style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)' }}
-            styles={{ body: { padding: '4px 8px', maxHeight: 260, overflow: 'auto' } }}>
+            styles={{ body: { padding: '4px 8px' } }}>
+            <div style={{ maxHeight: 140, overflowY: 'auto' }}>
             {trades.length > 0 ? (
-              trades.slice(0, 15).map((t, i) => (
+              trades.slice(0, 30).map((t, i) => (
                 <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0', fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
                   <span style={{ color: t.side === 'buy' ? 'var(--green-trade)' : 'var(--red-trade)' }}>{t.price.toLocaleString()}</span>
                   <span style={{ color: 'var(--text-secondary)' }}>{formatCryptoAmount(t.amount)}</span>
@@ -133,6 +111,7 @@ export default function MarketDetailPage() {
             ) : (
               <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>暂无成交记录</div>
             )}
+            </div>
           </Card>
         </Col>
 

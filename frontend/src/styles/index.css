@@ -132,13 +132,13 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--border-color);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
   transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 ::-webkit-scrollbar-corner {

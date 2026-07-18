@@ -8,13 +8,14 @@ interface Props {
   data: Kline[];
   loading?: boolean;
   symbol: string;
+  period?: KlinePeriod;
+  onPeriodChange?: (period: KlinePeriod) => void;
 }
 
-export default function KlineChart({ data }: Props) {
+export default function KlineChart({ data, period = '1h', onPeriodChange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef = useRef<any>(null);
-  const [period, setPeriod] = useState<KlinePeriod>('1h');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -108,7 +109,7 @@ export default function KlineChart({ data }: Props) {
         <Typography.Text style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
           K线图
         </Typography.Text>
-        <Radio.Group value={period} onChange={(e) => setPeriod(e.target.value)} size="small">
+        <Radio.Group value={period} onChange={(e) => onPeriodChange?.(e.target.value)} size="small">
           <Radio.Button value="1m">1m</Radio.Button>
           <Radio.Button value="5m">5m</Radio.Button>
           <Radio.Button value="15m">15m</Radio.Button>
