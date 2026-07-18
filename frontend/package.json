@@ -18,6 +18,7 @@
     "dayjs": "^1.11.21",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
+    "framer-motion": "^12.42.2",
     "i18next": "^26.3.1",
     "lightweight-charts": "^5.2.0",
     "monaco-editor": "^0.55.1",

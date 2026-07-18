@@ -2,6 +2,7 @@ import { Card, Typography } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, MinusOutlined } from '@ant-design/icons';
 import { formatNumber } from '@/lib/utils/format';
 import { ANIMATION_VARIANTS, staggerStyle } from '@/lib/utils/animation';
+import { motion } from 'framer-motion';
 
 interface MetricCardProps {
   /** 指标标签 */
@@ -40,6 +41,7 @@ interface MetricCardProps {
  *
  * 用于仪表盘、策略详情、回测报告、风控面板等场景。
  * 替代 ad-hoc 的带数字 Card 布局。
+ * glass 变体使用 Glassmorphism 风格。
  */
 export default function MetricCard({
   label,
@@ -95,10 +97,12 @@ export default function MetricCard({
       border: '1px solid var(--border-color)',
     },
     glass: {
-      background: 'rgba(22, 27, 34, 0.75)',
-      backdropFilter: 'blur(12px)',
-      WebkitBackdropFilter: 'blur(12px)',
-      border: '1px solid var(--border-color)',
+      background: 'var(--glass-bg)',
+      backdropFilter: 'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
+      WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(var(--glass-saturate))',
+      border: '1px solid var(--glass-border)',
+      boxShadow: 'var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+      borderRadius: 20,
     },
   };
 

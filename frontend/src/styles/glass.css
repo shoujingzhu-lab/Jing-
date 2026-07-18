@@ -1,0 +1,293 @@
+/* ============================================================
+   Glassmorphism 高级科技风格 — 全局样式
+
+   风格: Apple Vision Pro + Cyber Finance Glassmorphism
+   色彩: 电光蓝 #00D4FF + 紫渐变辅助
+   ============================================================ */
+
+/* ============================================================
+   CSS 变量 — Glass 专属
+   ============================================================ */
+:root,
+.dark {
+  /* Glass 主色调 */
+  --glass-primary: #00D4FF;
+  --glass-primary-bg: rgba(0, 212, 255, 0.12);
+  --glass-primary-glow: rgba(0, 212, 255, 0.2);
+
+  /* Glass 辅助色 — 紫 */
+  --glass-accent: #8B5CF6;
+  --glass-accent-bg: rgba(139, 92, 246, 0.12);
+  --glass-accent-glow: rgba(139, 92, 246, 0.2);
+
+  /* Glass 面板 */
+  --glass-bg: rgba(15, 23, 42, 0.75);
+  --glass-bg-hover: rgba(15, 23, 42, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(0, 212, 255, 0.35);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --glass-shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px var(--glass-primary-glow);
+  --glass-shadow-active: 0 0 32px var(--glass-primary-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --glass-blur: 32px;
+  --glass-saturate: 180%;
+}
+
+.light {
+  --glass-primary: #0098B8;
+  --glass-primary-bg: rgba(0, 152, 184, 0.08);
+  --glass-primary-glow: rgba(0, 152, 184, 0.12);
+
+  --glass-accent: #7C3AED;
+  --glass-accent-bg: rgba(124, 58, 237, 0.08);
+
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-bg-hover: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --glass-border-hover: rgba(0, 152, 184, 0.3);
+  --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --glass-shadow-hover: 0 8px 32px rgba(0, 0, 0, 0.1), 0 0 16px rgba(0, 152, 184, 0.1);
+  --glass-shadow-active: 0 0 24px rgba(0, 152, 184, 0.15);
+  --glass-blur: 24px;
+  --glass-saturate: 150%;
+}
+
+/* ============================================================
+   核心 Glass 类
+   ============================================================ */
+
+/* 基础玻璃面板 */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  border-radius: 16px;
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 玻璃卡片 — 增加内发光 */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 玻璃面板 — 更深背景 */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hover — 边框发光 + 上浮 */
+.glass-hover:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--glass-border-hover);
+  box-shadow: var(--glass-shadow-hover);
+  transform: translateY(-2px);
+}
+
+/* Active/选中态 — 强烈光晕 */
+.glass-active {
+  border-color: var(--glass-primary) !important;
+  box-shadow: var(--glass-shadow-active) !important;
+  background: rgba(0, 212, 255, 0.08);
+}
+
+/* ============================================================
+   玻璃按钮
+   ============================================================ */
+
+/* 主要按钮 — 电光蓝渐变 */
+.glass-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25), rgba(139, 92, 246, 0.25));
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-btn:hover {
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.4), rgba(139, 92, 246, 0.4));
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow: 0 0 24px var(--glass-primary-glow);
+  transform: translateY(-1px);
+}
+
+.glass-btn:active {
+  transform: scale(0.97);
+}
+
+/* 次要按钮 — 透明边框 */
+.glass-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-btn-secondary:hover {
+  background: var(--glass-bg);
+  border-color: var(--glass-border-hover);
+  box-shadow: 0 0 16px var(--glass-primary-glow);
+}
+
+.glass-btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* ============================================================
+   玻璃输入框
+   ============================================================ */
+.glass-input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  font-size: 14px;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-input:focus {
+  outline: none;
+  border-color: var(--glass-primary);
+  box-shadow: 0 0 0 3px var(--glass-primary-bg);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.glass-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   玻璃分隔线
+   ============================================================ */
+.glass-divider {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--glass-border),
+    var(--glass-primary-glow),
+    var(--glass-border),
+    transparent
+  );
+  border: none;
+  margin: 12px 0;
+}
+
+/* ============================================================
+   玻璃 Tag / Badge
+   ============================================================ */
+.glass-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 8px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-primary);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ============================================================
+   动画增强
+   ============================================================ */
+
+/* 玻璃脉冲光晕 */
+@keyframes glass-pulse {
+  0%, 100% { box-shadow: var(--glass-shadow); }
+  50% { box-shadow: var(--glass-shadow-hover); }
+}
+
+.glass-pulse {
+  animation: glass-pulse 3s ease-in-out infinite;
+}
+
+/* 边框扫描线 */
+@keyframes border-scan {
+  0% { border-color: rgba(0, 212, 255, 0.1); }
+  50% { border-color: rgba(0, 212, 255, 0.4); }
+  100% { border-color: rgba(0, 212, 255, 0.1); }
+}
+
+.glass-scan {
+  animation: border-scan 3s ease-in-out infinite;
+}
+
+/* 数字闪烁 (价格更新) */
+@keyframes value-flash-up {
+  0% { color: var(--green-trade); text-shadow: 0 0 12px rgba(38, 166, 154, 0.5); }
+  100% { color: var(--text-primary); text-shadow: none; }
+}
+
+@keyframes value-flash-down {
+  0% { color: var(--red-trade); text-shadow: 0 0 12px rgba(239, 83, 80, 0.5); }
+  100% { color: var(--text-primary); text-shadow: none; }
+}
+
+.value-flash-up {
+  animation: value-flash-up 0.8s ease-out;
+}
+
+.value-flash-down {
+  animation: value-flash-down 0.8s ease-out;
+}
+
+/* ============================================================
+   响应式 — 移动端降低模糊度 (性能)
+   ============================================================ */
+@media (max-width: 768px) {
+  :root {
+    --glass-blur: 16px;
+    --glass-saturate: 140%;
+  }
+}
+
+/* 可访问性 — 减少动画 */
+@media (prefers-reduced-motion: reduce) {
+  .glass,
+  .glass-card,
+  .glass-panel,
+  .glass-hover:hover,
+  .glass-btn,
+  .glass-btn-secondary {
+    transition: none;
+  }
+
+  .glass-hover:hover {
+    transform: none;
+  }
+}

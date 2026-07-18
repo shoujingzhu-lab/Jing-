@@ -74,22 +74,26 @@ export default function Header() {
 
   return (
     <AntHeader
-      className="card-glass"
+      className="glass-panel"
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         padding: '0 20px',
-        background: 'rgba(22, 27, 34, 0.85)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        borderBottom: '1px solid var(--border-color)',
+        background: 'rgba(15, 23, 42, 0.7)',
+        backdropFilter: 'blur(24px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+        borderTop: 'none',
+        borderLeft: 'none',
+        borderRight: 'none',
+        borderRadius: 0,
         height: 56,
         lineHeight: '56px',
         position: 'sticky',
         top: 0,
         zIndex: 100,
-        transition: 'background 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'background 300ms cubic-bezier(0.4, 0, 0.2, 1), border-color 300ms cubic-bezier(0.4, 0, 0.2, 1)',
       }}
     >
       {/* Logo + 品牌 */}

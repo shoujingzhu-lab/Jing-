@@ -8,6 +8,9 @@
  * — 阴影 → Tailwind boxShadow + 内联样式引用
  * — 过渡 → 组件动画 + CSS transitions
  * — 圆角 → Tailwind borderRadius + Ant Design borderRadius
+ *
+ * 风格: Glassmorphism — Apple Vision Pro × Cyber Finance
+ * 主色: 电光蓝 #00D4FF + 紫色渐变辅助
  */
 
 // ============================================================
@@ -61,6 +64,25 @@ export const colors = {
     crosshair: '#30363D',
     crosshairLight: '#D0D7DE',
     series: ['#F0B90B', '#26A69A', '#42A5F5', '#FF9800', '#EF5350', '#9C27B0', '#00BCD4', '#FF5722'],
+  },
+
+  /** Glassmorphism 玻璃风格色 (电光蓝 + 紫) */
+  glass: {
+    primary: '#00D4FF',
+    primaryBg: 'rgba(0, 212, 255, 0.12)',
+    primaryGlow: 'rgba(0, 212, 255, 0.2)',
+    accent: '#8B5CF6',
+    accentBg: 'rgba(139, 92, 246, 0.12)',
+    accentGlow: 'rgba(139, 92, 246, 0.2)',
+    bg: 'rgba(15, 23, 42, 0.75)',
+    bgHover: 'rgba(15, 23, 42, 0.88)',
+    border: 'rgba(255, 255, 255, 0.08)',
+    borderHover: 'rgba(0, 212, 255, 0.35)',
+    shadow: '0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+    shadowHover: '0 12px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(0, 212, 255, 0.2)',
+    shadowActive: '0 0 32px rgba(0, 212, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
+    blur: '32px',
+    saturate: '180%',
   },
 
   /** 功能色背景 (半透明) */

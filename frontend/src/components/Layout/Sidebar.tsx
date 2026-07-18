@@ -38,9 +38,11 @@ export default function Sidebar() {
       collapsed={collapsed}
       trigger={null}
       style={{
-        background: 'var(--bg-secondary)',
-        borderRight: '1px solid var(--border-color)',
-        transition: 'width 250ms cubic-bezier(0.4, 0, 0.2, 1), min-width 250ms cubic-bezier(0.4, 0, 0.2, 1)',
+        background: 'rgba(15, 23, 42, 0.6)',
+        backdropFilter: 'blur(20px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        transition: 'width 300ms cubic-bezier(0.4, 0, 0.2, 1), min-width 300ms cubic-bezier(0.4, 0, 0.2, 1)',
         overflow: 'hidden',
       }}
     >
