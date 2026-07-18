@@ -63,5 +63,5 @@ echo [>] Starting Vite + opening browser...
 echo     http://localhost:3000/
 echo     Press Ctrl+C to stop
 echo ============================================
-call npx vite --host --open
+call npm run dev
 goto :eof
