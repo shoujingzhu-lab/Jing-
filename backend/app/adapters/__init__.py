@@ -6,6 +6,7 @@
 """
 
 from app.adapters.base import BaseExchangeAdapter
+from app.adapters.cache import AdapterCache, adapter_cache
 from app.adapters.exchanges import (
     EXCHANGE_MAP,
     BinanceAdapter,
@@ -23,4 +24,6 @@ __all__ = [
     "GateIOAdapter",
     "EXCHANGE_MAP",
     "create_adapter",
+    "AdapterCache",
+    "adapter_cache",
 ]

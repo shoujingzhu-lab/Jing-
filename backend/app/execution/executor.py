@@ -20,7 +20,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters import create_adapter
+from app.adapters import adapter_cache, create_adapter
 from app.core.security import decrypt_api_secret
 from app.execution.idempotency import IdempotencyManager
 from app.execution.orderbook_cache import orderbook_cache
@@ -115,8 +115,8 @@ class OrderExecutor:
                     f"avg_price={slippage_info['avg_price']}"
                 )
 
-        # 5. 创建适配器（已在内部做延迟初始化）
-        adapter = create_adapter(
+        # 5. 获取适配器（使用连接缓存，避免重复创建 ccxt 实例）
+        adapter = await adapter_cache.get(
             exchange=api_key.exchange,
             api_key=api_key.access_key,
             secret=secret,

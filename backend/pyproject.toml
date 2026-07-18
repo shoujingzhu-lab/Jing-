@@ -71,3 +71,26 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--cov=app",
+    "--cov-report=term-missing",
+    "--cov-report=xml",
+    "--cov-fail-under=60",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*", "alembic/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+show_missing = true

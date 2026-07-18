@@ -1,0 +1,43 @@
+# Prometheus 指标采集配置
+# P1-005: 抓取后端 + Redis + PostgreSQL + Celery 指标
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files: []
+
+scrape_configs:
+  # 后端 API 服务
+  - job_name: "quant-backend"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: "api"
+          env: "production"
+
+  # Redis
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis:6379"]
+        labels:
+          service: "cache"
+
+  # PostgreSQL
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:5432"]
+        labels:
+          service: "database"
+
+  # Prometheus 自监控
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
