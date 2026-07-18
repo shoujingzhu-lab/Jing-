@@ -1,99 +1,227 @@
 import type { ThemeConfig } from 'antd';
+import { colors, typography, radius, spacing } from '@/tokens';
 
-/** 暗色主题配置（需求文档 6.1 节） */
+/**
+ * 暗色主题配置
+ *
+ * 所有颜色值源自 src/tokens/index.ts 设计 Token 系统，
+ * 保证 Ant Design 组件与自定义组件视觉一致。
+ */
 export const darkTheme: ThemeConfig = {
   token: {
-    colorPrimary: '#F0B90B',
-    colorSuccess: '#26A69A',
-    colorWarning: '#FF9800',
-    colorError: '#EF5350',
-    colorInfo: '#42A5F5',
-    colorTextBase: '#E6EDF3',
-    colorBgBase: '#0D1117',
-    colorBgContainer: '#161B22',
-    colorBgElevated: '#21262D',
-    colorBorder: '#30363D',
-    colorText: '#E6EDF3',
-    colorTextSecondary: '#8B949E',
-    colorTextTertiary: '#8B949E',
-    borderRadius: 8,
-    fontFamily: `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif`,
-    fontSize: 14,
+    // 品牌色
+    colorPrimary: colors.brand,
+    colorSuccess: colors.success,
+    colorWarning: colors.warning,
+    colorError: colors.error,
+    colorInfo: colors.info,
+
+    // 背景/文字
+    colorTextBase: colors.dark.textPrimary,
+    colorBgBase: colors.dark.bgPrimary,
+    colorBgContainer: colors.dark.bgSecondary,
+    colorBgElevated: colors.dark.bgTertiary,
+    colorBorder: colors.dark.border,
+    colorText: colors.dark.textPrimary,
+    colorTextSecondary: colors.dark.textSecondary,
+    colorTextTertiary: colors.dark.textSecondary,
+
+    // 排版
+    borderRadius: radius.md,
+    fontFamily: typography.fontFamily.sans,
+    fontSize: typography.fontSize.base,
     controlHeight: 36,
   },
   components: {
     Layout: {
-      bodyBg: '#0D1117',
-      headerBg: '#161B22',
-      siderBg: '#161B22',
-      triggerBg: '#21262D',
+      bodyBg: colors.dark.bgPrimary,
+      headerBg: colors.dark.bgSecondary,
+      siderBg: colors.dark.bgSecondary,
+      triggerBg: colors.dark.bgTertiary,
     },
     Menu: {
-      darkItemBg: '#161B22',
-      darkSubMenuItemBg: '#21262D',
-      darkItemSelectedBg: 'rgba(240,185,11,0.15)',
-      darkItemHoverBg: 'rgba(255,255,255,0.06)',
+      darkItemBg: colors.dark.bgSecondary,
+      darkSubMenuItemBg: colors.dark.bgTertiary,
+      darkItemSelectedBg: colors.functional.brandBg,
+      darkItemHoverBg: colors.interaction.hover,
     },
     Card: {
-      colorBgContainer: '#161B22',
+      colorBgContainer: colors.dark.bgSecondary,
     },
     Table: {
-      headerBg: '#21262D',
-      rowHoverBg: 'rgba(255,255,255,0.04)',
-      borderColor: '#30363D',
+      headerBg: colors.dark.bgTertiary,
+      rowHoverBg: colors.interaction.hover,
+      borderColor: colors.dark.border,
     },
     Input: {
-      colorBgContainer: '#21262D',
+      colorBgContainer: colors.dark.bgTertiary,
+      activeBorderColor: colors.brand,
+    },
+    InputNumber: {
+      colorBgContainer: colors.dark.bgTertiary,
+      activeBorderColor: colors.brand,
     },
     Select: {
-      colorBgContainer: '#21262D',
+      colorBgContainer: colors.dark.bgTertiary,
+      optionSelectedBg: colors.functional.brandBg,
     },
     Button: {
-      colorPrimaryBg: '#F0B90B',
+      colorPrimaryBg: colors.brand,
+      primaryShadow: 'none',
     },
     Tabs: {
-      colorText: '#8B949E',
-      inkBarColor: '#F0B90B',
+      colorText: colors.dark.textSecondary,
+      inkBarColor: colors.brand,
+      itemSelectedColor: colors.brand,
+      itemHoverColor: colors.dark.textPrimary,
     },
     Tooltip: {
-      colorBgSpotlight: '#21262D',
+      colorBgSpotlight: colors.dark.bgTertiary,
+    },
+    Dropdown: {
+      colorBgElevated: colors.dark.bgSecondary,
+    },
+    Modal: {
+      colorBgElevated: colors.dark.bgSecondary,
+      headerBg: colors.dark.bgSecondary,
+      titleColor: colors.dark.textPrimary,
+      titleFontSize: typography.fontSize.lg,
+    },
+    Notification: {
+      colorBgElevated: colors.dark.bgSecondary,
+    },
+    Tag: {
+      defaultBg: colors.dark.bgTertiary,
+      defaultColor: colors.dark.textSecondary,
+    },
+    Progress: {
+      defaultColor: colors.brand,
+      remainingColor: colors.dark.border,
+    },
+    Slider: {
+      trackBg: colors.brand,
+      trackHoverBg: colors.brand,
+      railBg: colors.dark.border,
+      handleColor: colors.brand,
+      handleActiveColor: colors.brand,
+    },
+    Switch: {
+      colorPrimary: colors.brand,
+      colorPrimaryHover: colors.brand,
+    },
+    Segmented: {
+      itemSelectedBg: colors.functional.brandBg,
+      itemSelectedColor: colors.brand,
+      trackBg: colors.dark.bgTertiary,
+    },
+    Drawer: {
+      colorBgElevated: colors.dark.bgSecondary,
+    },
+    Popover: {
+      colorBgElevated: colors.dark.bgSecondary,
+    },
+    Timeline: {
+      dotBg: colors.dark.bgSecondary,
     },
   },
 };
 
-/** 亮色主题配置 */
+/**
+ * 亮色主题配置
+ */
 export const lightTheme: ThemeConfig = {
   token: {
-    colorPrimary: '#F0B90B',
-    colorSuccess: '#26A69A',
-    colorWarning: '#FF9800',
-    colorError: '#EF5350',
-    colorInfo: '#42A5F5',
-    colorTextBase: '#1F2328',
-    colorBgBase: '#FFFFFF',
-    colorBgContainer: '#F6F8FA',
-    colorBgElevated: '#FFFFFF',
-    colorBorder: '#D0D7DE',
-    colorText: '#1F2328',
-    colorTextSecondary: '#656D76',
-    borderRadius: 8,
-    fontFamily: `-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif`,
-    fontSize: 14,
+    // 品牌色（与暗色主题共用）
+    colorPrimary: colors.brand,
+    colorSuccess: colors.success,
+    colorWarning: colors.warning,
+    colorError: colors.error,
+    colorInfo: colors.info,
+
+    // 背景/文字
+    colorTextBase: colors.light.textPrimary,
+    colorBgBase: colors.light.bgPrimary,
+    colorBgContainer: colors.light.bgSecondary,
+    colorBgElevated: colors.light.bgPrimary,
+    colorBorder: colors.light.border,
+    colorText: colors.light.textPrimary,
+    colorTextSecondary: colors.light.textSecondary,
+
+    // 排版
+    borderRadius: radius.md,
+    fontFamily: typography.fontFamily.sans,
+    fontSize: typography.fontSize.base,
+    controlHeight: 36,
   },
   components: {
     Layout: {
-      bodyBg: '#FFFFFF',
-      headerBg: '#F6F8FA',
-      siderBg: '#F6F8FA',
+      bodyBg: colors.light.bgPrimary,
+      headerBg: colors.light.bgSecondary,
+      siderBg: colors.light.bgSecondary,
+    },
+    Menu: {
+      itemBg: colors.light.bgSecondary,
+      itemSelectedBg: colors.functional.brandBg,
+      itemHoverBg: colors.interaction.hoverLight,
     },
     Card: {
-      colorBgContainer: '#FFFFFF',
+      colorBgContainer: colors.light.bgPrimary,
     },
     Table: {
-      headerBg: '#EBEEF2',
+      headerBg: colors.light.bgTertiary,
+      rowHoverBg: colors.interaction.hoverLight,
+      borderColor: colors.light.border,
     },
     Input: {
-      colorBgContainer: '#FFFFFF',
+      colorBgContainer: colors.light.bgPrimary,
+      activeBorderColor: colors.brand,
+    },
+    InputNumber: {
+      colorBgContainer: colors.light.bgPrimary,
+      activeBorderColor: colors.brand,
+    },
+    Select: {
+      colorBgContainer: colors.light.bgPrimary,
+      optionSelectedBg: colors.functional.brandBg,
+    },
+    Button: {
+      primaryShadow: 'none',
+    },
+    Tabs: {
+      inkBarColor: colors.brand,
+      itemSelectedColor: colors.brand,
+    },
+    Tooltip: {
+      colorBgSpotlight: colors.dark.bgTertiary,
+    },
+    Dropdown: {
+      colorBgElevated: colors.light.bgPrimary,
+    },
+    Modal: {
+      colorBgElevated: colors.light.bgPrimary,
+      headerBg: colors.light.bgPrimary,
+      titleColor: colors.light.textPrimary,
+      titleFontSize: typography.fontSize.lg,
+    },
+    Notification: {
+      colorBgElevated: colors.light.bgPrimary,
+    },
+    Progress: {
+      remainingColor: colors.light.border,
+    },
+    Slider: {
+      railBg: colors.light.border,
+    },
+    Segmented: {
+      itemSelectedBg: colors.functional.brandBg,
+      itemSelectedColor: colors.brand,
+      trackBg: colors.light.bgTertiary,
+    },
+    Drawer: {
+      colorBgElevated: colors.light.bgPrimary,
+    },
+    Popover: {
+      colorBgElevated: colors.light.bgPrimary,
     },
   },
 };

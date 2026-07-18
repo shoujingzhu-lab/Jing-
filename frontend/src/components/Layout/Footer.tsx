@@ -9,31 +9,35 @@ dayjs.extend(utc);
 
 const { Footer: AntFooter } = Layout;
 
+/** 连接状态配置 */
+const STATUS_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string; animated: boolean }> = {
+  connected: {
+    icon: <CheckCircleOutlined />,
+    color: '#26A69A',
+    label: '在线',
+    animated: false,
+  },
+  reconnecting: {
+    icon: <SyncOutlined spin />,
+    color: '#FF9800',
+    label: '重连中',
+    animated: true,
+  },
+  disconnected: {
+    icon: <CloseCircleOutlined />,
+    color: '#EF5350',
+    label: '离线',
+    animated: false,
+  },
+};
+
 export default function Footer() {
   const { t } = useTranslation();
   const wsStatus = useAppStore((s) => s.wsStatus);
   const marketLatency = useAppStore((s) => s.marketLatency);
   const currentUtcTime = useAppStore((s) => s.currentUtcTime);
 
-  const statusConfig: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
-    connected: {
-      icon: <CheckCircleOutlined />,
-      color: '#26A69A',
-      label: t('footer.online'),
-    },
-    reconnecting: {
-      icon: <SyncOutlined spin />,
-      color: '#FF9800',
-      label: t('footer.reconnecting'),
-    },
-    disconnected: {
-      icon: <CloseCircleOutlined />,
-      color: '#EF5350',
-      label: t('footer.offline'),
-    },
-  };
-
-  const current = statusConfig[wsStatus] || statusConfig.disconnected;
+  const current = STATUS_CONFIG[wsStatus] || STATUS_CONFIG.disconnected;
 
   return (
     <AntFooter
@@ -51,22 +55,39 @@ export default function Footer() {
       }}
     >
       <Space size="middle">
+        {/* WebSocket 状态 + 动画脉冲点 */}
         <Tag
-          icon={current.icon}
+          icon={
+            <Space size={4}>
+              {current.animated && (
+                <span
+                  className="animate-pulse-dot"
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor: current.color,
+                    display: 'inline-block',
+                  }}
+                />
+              )}
+              {current.icon}
+            </Space>
+          }
           color={current.color}
-          style={{ margin: 0, fontSize: 11, lineHeight: '20px' }}
+          style={{ margin: 0, fontSize: 11, lineHeight: '20px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
         >
-          {current.label}
+          {t('footer.online', { defaultValue: current.label })}
         </Tag>
         <span>
           {t('footer.latency')}: {marketLatency}ms
         </span>
       </Space>
       <Space size="middle">
-        <span>
+        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
           {t('footer.systemTime')} UTC: {currentUtcTime ? dayjs(currentUtcTime).utc().format('YYYY-MM-DD HH:mm:ss') : '--'}
         </span>
-        <span style={{ color: 'var(--text-secondary)', opacity: 0.5 }}>v1.0.0</span>
+        <span style={{ color: 'var(--text-secondary)', opacity: 0.5, fontSize: 11 }}>v1.0.0</span>
       </Space>
     </AntFooter>
   );

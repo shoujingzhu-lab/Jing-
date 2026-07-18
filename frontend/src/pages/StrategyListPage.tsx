@@ -1,28 +1,23 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typography, Button, Input, Select, Space, Row, Col, Card, Tag, Dropdown, Table, message } from 'antd';
-import { PlusOutlined, SearchOutlined, AppstoreOutlined, UnorderedListOutlined, EditOutlined, BarChartOutlined, PlayCircleOutlined, ThunderboltOutlined, MoreOutlined, DeleteOutlined, PauseCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, AppstoreOutlined, UnorderedListOutlined, EditOutlined, BarChartOutlined, PlayCircleOutlined, ThunderboltOutlined, MoreOutlined, DeleteOutlined } from '@ant-design/icons';
 import EmptyState from '@/components/ui/EmptyState';
+import Skeleton from '@/components/ui/Skeleton';
 import StatusTag from '@/components/ui/StatusTag';
 import { STRATEGY_STATUS_MAP } from '@/lib/constants';
 import { formatPercent } from '@/lib/utils/format';
+import { useStrategyList, useDeleteStrategy } from '@/features/strategy/hooks/useStrategy';
 import type { Strategy, StrategyStatus } from '@/lib/types';
-
-const MOCK: Strategy[] = [
-  { id: 'stg1', name: '均线交叉策略', type: 'visual', status: 'live', symbols: ['BTC/USDT'], exchange: 'binance', createdAt: '2026-03-15', updatedAt: '2026-06-05', version: 3, runningDays: 45, tags: ['趋势'], lastBacktest: { id: 'bt1', totalReturn: 32.5, sharpeRatio: 1.8, maxDrawdown: -12.3, completedAt: '2026-05-20' } },
-  { id: 'stg2', name: '网格震荡策略', type: 'visual', status: 'live', symbols: ['ETH/USDT'], exchange: 'okx', createdAt: '2026-04-01', updatedAt: '2026-06-01', version: 5, runningDays: 30, tags: ['震荡'], lastBacktest: { id: 'bt2', totalReturn: 18.2, sharpeRatio: 1.5, maxDrawdown: -8.7, completedAt: '2026-05-25' } },
-  { id: 'stg3', name: '动量突破策略', type: 'code', status: 'simulating', symbols: ['SOL/USDT'], exchange: 'binance', createdAt: '2026-05-10', updatedAt: '2026-06-06', version: 2, runningDays: 15, tags: ['动量'], lastBacktest: { id: 'bt3', totalReturn: 8.75, sharpeRatio: 1.2, maxDrawdown: -15.1, completedAt: '2026-06-03' } },
-  { id: 'stg4', name: 'RSI 反转策略', type: 'visual', status: 'backtesting', symbols: ['BNB/USDT', 'ADA/USDT'], exchange: 'bybit', createdAt: '2026-06-01', updatedAt: '2026-06-06', version: 1, runningDays: 0, tags: ['反转'] },
-  { id: 'stg5', name: '做市策略', type: 'code', status: 'draft', symbols: ['BTC/USDT'], exchange: 'binance', createdAt: '2026-06-05', updatedAt: '2026-06-05', version: 1, runningDays: 0, tags: ['做市'] },
-  { id: 'stg6', name: '趋势金字塔', type: 'visual', status: 'paused', symbols: ['ETH/USDT'], exchange: 'binance', createdAt: '2026-02-10', updatedAt: '2026-05-30', version: 8, runningDays: 90, tags: ['趋势'], lastBacktest: { id: 'bt4', totalReturn: 45.2, sharpeRatio: 2.1, maxDrawdown: -20.5, completedAt: '2026-04-15' } },
-];
 
 export default function StrategyListPage() {
   const navigate = useNavigate();
-  const [strategies] = useState(MOCK);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StrategyStatus[]>([]);
+
+  const { data: strategies = [], isLoading, isError, refetch } = useStrategyList();
+  const deleteMutation = useDeleteStrategy();
 
   const filtered = strategies.filter((s) => {
     if (search && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -30,13 +25,20 @@ export default function StrategyListPage() {
     return true;
   });
 
+  const handleDelete = (s: Strategy) => {
+    deleteMutation.mutate(s.id, {
+      onSuccess: () => message.success('策略已删除'),
+      onError: () => message.error('删除失败'),
+    });
+  };
+
   const getMenuItems = (s: Strategy) => [
     { key: 'edit', icon: <EditOutlined />, label: '编辑', onClick: () => navigate(s.type === 'visual' ? `/strategy/visual/${s.id}` : `/strategy/code/${s.id}`) },
     { key: 'backtest', icon: <BarChartOutlined />, label: '回测', onClick: () => navigate(`/backtest/new?strategy=${s.id}`) },
     { key: 'sim', icon: <PlayCircleOutlined />, label: '模拟运行', onClick: () => navigate(`/sim?strategy=${s.id}`) },
     { key: 'live', icon: <ThunderboltOutlined />, label: '实盘运行', onClick: () => message.info('请先通过模拟验证') },
     { type: 'divider' as const },
-    { key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true, onClick: () => message.success('已删除') },
+    { key: 'delete', icon: <DeleteOutlined />, label: '删除', danger: true, onClick: () => handleDelete(s) },
   ];
 
   return (
@@ -62,17 +64,38 @@ export default function StrategyListPage() {
         </Space>
       </Space>
 
-      {filtered.length === 0 ? (
+      {/* Loading */}
+      {isLoading && (
+        <Skeleton type="metric-row" rows={6} />
+      )}
+
+      {/* Error */}
+      {isError && !isLoading && (
+        <EmptyState title="加载失败" description="无法获取策略列表，请检查网络连接" actionText="重试" onAction={() => refetch()} />
+      )}
+
+      {/* Empty */}
+      {!isLoading && !isError && filtered.length === 0 && (
         <EmptyState title="还没有策略" description="创建你的第一个量化策略" actionText="创建策略" onAction={() => navigate('/strategy/visual/new')} />
-      ) : viewMode === 'grid' ? (
+      )}
+
+      {/* Grid View */}
+      {!isLoading && !isError && filtered.length > 0 && viewMode === 'grid' && (
         <Row gutter={[16, 16]}>
-          {filtered.map((s) => {
+          {filtered.map((s, idx) => {
             const statusConf = STRATEGY_STATUS_MAP[s.status];
             return (
-              <Col xs={24} sm={12} lg={8} xl={6} key={s.id}>
-                <Card hoverable size="small" onClick={() => navigate(`/strategy/${s.id}/detail`)}
-                  style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border-color)', height: '100%' }}
-                  styles={{ body: { padding: 16 } }}>
+              <Col xs={24} sm={12} lg={8} xl={6} key={s.id}
+                style={{ animation: `slide-up 0.3s ease-out both`, animationDelay: `${idx * 50}ms` }}
+              >
+                <Card
+                  hoverable
+                  size="small"
+                  onClick={() => navigate(`/strategy/${s.id}/detail`)}
+                  className="card-base card-hover"
+                  style={{ height: '100%', transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)' }}
+                  styles={{ body: { padding: 16 } }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <Typography.Text strong style={{ fontSize: 15 }}>{s.name}</Typography.Text>
@@ -102,11 +125,14 @@ export default function StrategyListPage() {
             );
           })}
         </Row>
-      ) : (
+      )}
+
+      {/* Table View */}
+      {!isLoading && !isError && filtered.length > 0 && viewMode === 'table' && (
         <Table<Strategy> dataSource={filtered} rowKey="id" size="middle" pagination={{ pageSize: 20 }}
           onRow={(r) => ({ onClick: () => navigate(`/strategy/${r.id}/detail`), style: { cursor: 'pointer' } })}
           columns={[
-            { title: '策略名', dataIndex: 'name', render: (n: string, r: Strategy) => <a>{n}</a> },
+            { title: '策略名', dataIndex: 'name', render: (n: string) => <a>{n}</a> },
             { title: '类型', dataIndex: 'type', width: 80, render: (t: string) => <Tag>{t === 'visual' ? '可视化' : '代码'}</Tag> },
             { title: '状态', dataIndex: 'status', width: 90, render: (s: string) => <StatusTag status={s} label={STRATEGY_STATUS_MAP[s]?.label || s} /> },
             { title: '交易对', dataIndex: 'symbols', width: 180, render: (ss: string[]) => ss.join(', ') },

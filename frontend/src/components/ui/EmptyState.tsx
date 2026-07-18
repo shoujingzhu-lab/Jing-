@@ -20,6 +20,7 @@ export default function EmptyState({
 }: EmptyStateProps) {
   return (
     <div
+      className="animate-fade-in"
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -32,9 +33,13 @@ export default function EmptyState({
         image={image || Empty.PRESENTED_IMAGE_SIMPLE}
         description={
           <>
-            <div style={{ color: 'var(--text-primary)', fontSize: 16, marginBottom: 8 }}>{title}</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: 16, marginBottom: 8, fontWeight: 500 }}>
+              {title}
+            </div>
             {description && (
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{description}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                {description}
+              </div>
             )}
           </>
         }

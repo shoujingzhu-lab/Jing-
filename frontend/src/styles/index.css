@@ -2,25 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ========== CSS 变量（需求文档 6.1 色彩系统 - 暗色模式） ========== */
+/* ============================================================
+   CSS 变量 — 暗色模式 (默认)
+   值来源于 src/tokens/index.ts 设计 Token 系统
+   ============================================================ */
 :root,
 .dark {
+  /* 背景层级 */
   --bg-primary: #0D1117;
   --bg-secondary: #161B22;
   --bg-tertiary: #21262D;
+  /* 边框 */
   --border-color: #30363D;
+  /* 文本 */
   --text-primary: #E6EDF3;
   --text-secondary: #8B949E;
+  /* 交易涨跌 */
   --green-trade: #26A69A;
   --red-trade: #EF5350;
   --green-bg: rgba(38, 166, 154, 0.15);
   --red-bg: rgba(239, 83, 80, 0.15);
+  /* 品牌/功能 */
+  --brand: #F0B90B;
   --warning: #FF9800;
   --info: #42A5F5;
-  --brand: #F0B90B;
+  /* 功能色背景 */
+  --brand-bg: rgba(240, 185, 11, 0.15);
+  --success-bg: rgba(38, 166, 154, 0.15);
+  --error-bg: rgba(239, 83, 80, 0.15);
+  --warning-bg: rgba(255, 152, 0, 0.15);
+  --info-bg: rgba(66, 165, 245, 0.15);
+  /* 交互 */
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --active-bg: rgba(255, 255, 255, 0.1);
+  /* 阴影 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-hover: 0 4px 16px rgba(240, 185, 11, 0.1);
+  --shadow-glow-brand: 0 0 12px rgba(240, 185, 11, 0.15);
+  --shadow-glow-green: 0 0 12px rgba(38, 166, 154, 0.15);
+  --shadow-glow-red: 0 0 12px rgba(239, 83, 80, 0.15);
+  /* 过渡 */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-color: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1), color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 亮色模式 */
+/* ============================================================
+   CSS 变量 — 亮色模式
+   ============================================================ */
 .light {
   --bg-primary: #FFFFFF;
   --bg-secondary: #F6F8FA;
@@ -32,12 +64,32 @@
   --red-trade: #EF5350;
   --green-bg: rgba(38, 166, 154, 0.1);
   --red-bg: rgba(239, 83, 80, 0.1);
+  --brand: #F0B90B;
   --warning: #FF9800;
   --info: #42A5F5;
-  --brand: #F0B90B;
+  --brand-bg: rgba(240, 185, 11, 0.12);
+  --success-bg: rgba(38, 166, 154, 0.1);
+  --error-bg: rgba(239, 83, 80, 0.1);
+  --warning-bg: rgba(255, 152, 0, 0.1);
+  --info-bg: rgba(66, 165, 245, 0.1);
+  --hover-bg: rgba(0, 0, 0, 0.04);
+  --active-bg: rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-modal: 0 8px 24px rgba(0, 0, 0, 0.15);
+  --shadow-hover: 0 4px 16px rgba(240, 185, 11, 0.08);
+  --shadow-glow-brand: 0 0 12px rgba(240, 185, 11, 0.1);
+  --shadow-glow-green: 0 0 12px rgba(38, 166, 154, 0.1);
+  --shadow-glow-red: 0 0 12px rgba(239, 83, 80, 0.1);
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-color: background-color 250ms cubic-bezier(0.4, 0, 0.2, 1), color 250ms cubic-bezier(0.4, 0, 0.2, 1), border-color 250ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ========== 全局基础样式 ========== */
+/* ============================================================
+   全局重置与基础样式
+   ============================================================ */
 * {
   margin: 0;
   padding: 0;
@@ -54,31 +106,60 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 滚动条样式（暗色主题） */
+/* 选中文本 */
+::selection {
+  background: rgba(240, 185, 11, 0.3);
+  color: #fff;
+}
+
+/* 聚焦样式 */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ============================================================
+   滚动条 — 全局美化
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-secondary);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 3px;
+  transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-secondary);
 }
 
-/* 数字字体 */
-.font-mono, .mono {
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================================
+   排版工具类
+   ============================================================ */
+.font-mono, .mono, .tabular-nums {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-/* ========== Ant Design 暗色主题覆盖 ========== */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+   Ant Design 暗色主题覆盖
+   (ConfigProvider token 不覆盖的细粒度场景)
+   ============================================================ */
 .dark .ant-layout {
   background: var(--bg-primary);
 }
@@ -104,11 +185,12 @@ html, body {
 }
 
 .dark .ant-table-tbody > tr:hover > td {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--hover-bg);
 }
 
 .dark .ant-input,
 .dark .ant-input-number,
+.dark .ant-input-affix-wrapper,
 .dark .ant-select-selector,
 .dark .ant-picker {
   background: var(--bg-tertiary);
@@ -116,12 +198,24 @@ html, body {
   color: var(--text-primary);
 }
 
-.dark .ant-input::placeholder {
+.dark .ant-input::placeholder,
+.dark .ant-input-number::placeholder {
   color: var(--text-secondary);
+}
+
+.dark .ant-input:focus,
+.dark .ant-input-number:focus,
+.dark .ant-input-affix-wrapper:focus,
+.dark .ant-input-affix-wrapper-focused,
+.dark .ant-select-selector:focus,
+.dark .ant-picker-focused {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px rgba(240, 185, 11, 0.1);
 }
 
 .dark .ant-modal-content {
   background: var(--bg-secondary);
+  box-shadow: var(--shadow-modal);
 }
 
 .dark .ant-modal-header {
@@ -135,10 +229,15 @@ html, body {
 
 .dark .ant-dropdown-menu {
   background: var(--bg-secondary);
+  box-shadow: var(--shadow-elevated);
 }
 
 .dark .ant-dropdown-menu-item {
   color: var(--text-primary);
+}
+
+.dark .ant-dropdown-menu-item:hover {
+  background: var(--hover-bg);
 }
 
 .dark .ant-tabs-nav {
@@ -154,13 +253,61 @@ html, body {
   background: var(--bg-secondary);
 }
 
-/* ========== 工具类 ========== */
+.dark .ant-drawer-content {
+  background: var(--bg-secondary);
+}
+
+.dark .ant-popover-inner {
+  background: var(--bg-secondary);
+  box-shadow: var(--shadow-elevated);
+}
+
+/* ============================================================
+   共享卡片样式 (.card-base)
+   ============================================================ */
+@layer components {
+  .card-base {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    transition: var(--transition-color), box-shadow var(--transition-normal);
+  }
+
+  .card-base.card-hover:hover {
+    border-color: var(--brand);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+
+  .card-bordered {
+    border: 1px solid var(--border-color);
+  }
+
+  .card-glass {
+    background: rgba(22, 27, 34, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+  }
+
+  .light .card-glass {
+    background: rgba(255, 255, 255, 0.8);
+  }
+}
+
+/* ============================================================
+   交易工具类
+   ============================================================ */
 .text-green {
   color: var(--green-trade);
 }
 
 .text-red {
   color: var(--red-trade);
+}
+
+.text-brand {
+  color: var(--brand);
 }
 
 .bg-green-transparent {
@@ -171,7 +318,11 @@ html, body {
   background: var(--red-bg);
 }
 
-/* 价格闪烁动画 */
+/* ============================================================
+   动画关键帧
+   ============================================================ */
+
+/* 价格闪烁 */
 @keyframes flash-green {
   0% { background-color: rgba(38, 166, 154, 0.4); }
   100% { background-color: transparent; }
@@ -190,14 +341,111 @@ html, body {
   animation: flash-red 0.6s ease-out;
 }
 
-/* 骨架屏动画 */
+/* 骨架屏 shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
 
 .skeleton-shimmer {
-  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-color) 50%, var(--bg-tertiary) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--border-color) 50%,
+    var(--bg-tertiary) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
+}
+
+/* 页面入场 */
+@keyframes page-enter {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-page-enter {
+  animation: page-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 淡入 */
+@keyframes fade-in {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+/* 上滑入 */
+@keyframes slide-up {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* 缩放入 */
+@keyframes scale-in {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out;
+}
+
+/* 脉冲点 (连接状态等) */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.7); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* 数币跳动 */
+@keyframes count-up {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.animate-count-up {
+  animation: count-up 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* ============================================================
+   毛玻璃 / 模糊工具类
+   ============================================================ */
+.backdrop-blur {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.backdrop-blur-sm {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.backdrop-blur-lg {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ============================================================
+   减少动画 (可访问性)
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

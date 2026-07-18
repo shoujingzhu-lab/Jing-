@@ -22,7 +22,11 @@ interface StatusTagProps {
   style?: React.CSSProperties;
 }
 
-const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = {
+/** 需要脉冲动画的状态 */
+const PULSE_STATUSES = new Set(['processing', 'backtesting', 'simulating']);
+
+/** 内置状态配置 — 覆盖了后端/业务常用状态 */
+const BUILTIN_STATUS: Record<string, { color: string; icon: React.ReactNode }> = {
   success: { color: 'green', icon: <CheckCircleOutlined /> },
   processing: { color: 'blue', icon: <SyncOutlined spin /> },
   error: { color: 'red', icon: <CloseCircleOutlined /> },
@@ -33,12 +37,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: React.ReactNode }> = 
   pending: { color: 'default', icon: <ClockCircleOutlined /> },
 };
 
-const PULSE_STYLE: React.CSSProperties = {
-  animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-};
-
 export default function StatusTag({ status, label, statusMap, animate, style }: StatusTagProps) {
-  // 如果提供了 statusMap，从映射中解析 label 和颜色状态
   let resolvedLabel: string = label || status;
   let resolvedStatus: string = status;
   let resolvedColor: string | undefined;
@@ -50,7 +49,8 @@ export default function StatusTag({ status, label, statusMap, animate, style }: 
     else resolvedStatus = 'default';
   }
 
-  const config = STATUS_CONFIG[resolvedStatus] || STATUS_CONFIG.default;
+  const config = BUILTIN_STATUS[resolvedStatus] || BUILTIN_STATUS.default;
+  const shouldPulse = animate && PULSE_STATUSES.has(status);
 
   return (
     <Tag
@@ -58,10 +58,26 @@ export default function StatusTag({ status, label, statusMap, animate, style }: 
       color={resolvedColor || config.color}
       style={{
         margin: 0,
-        ...(animate ? PULSE_STYLE : {}),
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+        transition: 'all 250ms cubic-bezier(0.4, 0, 0.2, 1)',
         ...style,
       }}
     >
+      {/* 动画状态脉冲点 */}
+      {shouldPulse && (
+        <span
+          className="animate-pulse-dot"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: '50%',
+            backgroundColor: 'currentColor',
+            display: 'inline-block',
+          }}
+        />
+      )}
       {resolvedLabel}
     </Tag>
   );
